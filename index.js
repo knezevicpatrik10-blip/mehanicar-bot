@@ -1048,24 +1048,24 @@ client.on('interactionCreate', async (interaction) => {
         // ── /panel-tiketa ─────────────────────────────────────────────────
         if (commandName === 'panel-tiketa') {
             const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('tiket_popravka').setLabel('🔧 Popravka Oružija').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('tiket_zalbe').setLabel('📝 Žalbe').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('tiket_poso').setLabel('💼 Tiket za Poso').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('tiket_kupovina').setLabel('🛒 Kupovina Oružija').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('tiket_popravka').setLabel(' Popravka Oružija').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('tiket_zalbe').setLabel(' Žalbe').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('tiket_poso').setLabel(' Tiket za Poso').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('tiket_kupovina').setLabel(' Kupovina Oružija').setStyle(ButtonStyle.Danger),
             );
             await interaction.channel.send({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0x5865F2)
-                        .setTitle('🎫 Panel Tiketa')
+                        .setTitle(' TIKETI')
                         .setDescription(
                             'Odaberi kategoriju tiketa klikom na dugme ispod.\n\n' +
-                            '🔧 **Popravka Oružija** — Za popravku oružija\n' +
-                            '📝 **Žalbe** — Za žalbe i prigovore\n' +
-                            '💼 **Tiket za Poso** — Za prijave na posao\n' +
-                            '🛒 **Kupovina Oružija** — Za kupovinu oružija'
+                            ' **Popravka Oružija** — Za popravku oružija\n' +
+                            ' **Žalbe** — Za žalbe na radnike\n' +
+                            ' **Tiket za Poso** — Za prijave na posao\n' +
+                            ' **Kupovina Oružija** — Za kupovinu oružija'
                         )
-                        .setFooter({ text: 'Možeš imati samo jedan otvoren tiket u isto vrijeme.' })
+                        .setFooter({ text: 'Mozes samo jedan tiket imat otvoren majmune!.' })
                         .setTimestamp(),
                 ],
                 components: [row],
