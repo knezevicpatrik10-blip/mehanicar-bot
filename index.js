@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } = require('discord.js');
 const fs = require('fs');
 const path                = require('path');
 const ffmpegStatic        = require('ffmpeg-static');
@@ -34,6 +34,8 @@ const OPOMENA_CHANNEL    = '1485364495269368000';
 const LOG_CHANNEL        = '1485738784170704979';    
 const VOICE_LOG_CHANNEL  = '1487227227161497701';    
 const BLACKLIST_CHANNEL  = '1487814599565774899';    
+const TICKET_LOG_CHANNEL = '1488603717400789184';
+const TICKET_PARENT_CATEGORY = null;
 const ALLOWED_MOD_ROLES  = [
     '1485364494359068815','1485364494350815250','1485364494350815249','1485364494359068818', // PERMISIJE NE DIRAJ JEDINO AKO TARE KAZE!
 ];
@@ -64,6 +66,7 @@ async function loadAllData() {
         if (d.key === 'vcStats')    vcStats    = d.value || {};
         if (d.key === 'tableState') tableState = d.value || { messageId: null };
         if (d.key === 'blState')    blState    = d.value || { messageId: null };
+        if (d.key === 'tickets')    tickets    = d.value || {};
     }
     console.log('✅ Podaci učitani iz MongoDB');
 }
@@ -79,11 +82,158 @@ let   warnings   = {};
 let   blacklist  = {};
 let   tableState = { messageId: null };
 let   blState    = { messageId: null };
+let   tickets    = {};
 
 function saveVcStats()    { dbSave('vcStats',    vcStats);    }
 function saveWarnings()   { dbSave('warnings',   warnings);   }
 function saveBlacklist()  { dbSave('blacklist',  blacklist);  }
 function saveBlState()    { dbSave('blState',    blState);    }
+function saveTickets()    { dbSave('tickets',    tickets);    }
+
+const TICKET_TYPES = {
+    tiket_popravka: 'POPRAVKA ORUZIJA',
+    tiket_zalbe: 'TIKET ZALBE',
+    tiket_poso: 'TIKET ZA POSO',
+    tiket_kupovina: 'KUPOVINA ORUZIJA',
+};
+
+async function createTicket(interaction, typeKey) {
+    const typeName = TICKET_TYPES[typeKey];
+    const guild = interaction.guild;
+    const user = interaction.user;
+    const existing = Object.entries(tickets).find(([, t]) => t.guildId === guild.id && t.userId === user.id);
+    if (existing) {
+        return interaction.reply({ content: `❌ Već imaš otvoren tiket: <#${existing[0]}>`, flags: MessageFlags.Ephemeral });
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const permissionOverwrites = [
+        { id: guild.id, deny: ['ViewChannel'] },
+        { id: user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'] },
+        ...ALLOWED_MOD_ROLES.map(roleId => ({
+            id: roleId,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+        })),
+    ];
+
+    const channelOptions = {
+        name: `tiket-${user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 18)}`,
+        type: ChannelType.GuildText,
+        permissionOverwrites,
+    };
+    if (TICKET_PARENT_CATEGORY) channelOptions.parent = TICKET_PARENT_CATEGORY;
+
+    const channel = await guild.channels.create(channelOptions).catch(() => null);
+    if (!channel) {
+        return interaction.editReply('❌ Ne mogu kreirati tiket kanal.');
+    }
+
+    tickets[channel.id] = {
+        guildId: guild.id,
+        userId: user.id,
+        type: typeName,
+        createdAt: new Date().toISOString(),
+        openedByTag: user.tag,
+    };
+    saveTickets();
+
+    const closeRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('zatvori_tiket')
+            .setLabel('Zatvori tiket')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    await channel.send({
+        content: `${user}`,
+        embeds: [
+            new EmbedBuilder()
+                .setColor(0x5865F2)
+                .setTitle(`🎫 ${typeName}`)
+                .setDescription('Napiši detaljno šta ti treba. Kada je gotovo, osoblje može zatvoriti tiket dugmetom ispod.')
+                .setTimestamp(),
+        ],
+        components: [closeRow],
+    }).catch(() => {});
+
+    return interaction.editReply(`✅ Tiket otvoren: ${channel}`);
+}
+
+async function closeTicket(interaction) {
+    const channel = interaction.channel;
+    const ticket = tickets[channel.id];
+    if (!ticket) {
+        return interaction.reply({ content: '❌ Ovo nije tiket kanal.', flags: MessageFlags.Ephemeral });
+    }
+
+    await interaction.deferReply();
+
+    let allMessages = [];
+    let before;
+    while (true) {
+        const options = { limit: 100 };
+        if (before) options.before = before;
+        const batch = await channel.messages.fetch(options).catch(() => null);
+        if (!batch || batch.size === 0) break;
+        allMessages = allMessages.concat([...batch.values()]);
+        before = batch.last().id;
+        if (batch.size < 100) break;
+    }
+
+    allMessages.reverse();
+    const transcriptText =
+        `Tiket tip: ${ticket.type}\n` +
+        `Otvorio: ${ticket.openedByTag}\n` +
+        `Zatvorio: ${interaction.user.tag}\n` +
+        `Otvoren: ${ticket.createdAt}\n` +
+        `${'='.repeat(60)}\n` +
+        allMessages.map(msg => {
+            const attachments = msg.attachments.size ? ` [Prilozi: ${msg.attachments.map(a => a.url).join(', ')}]` : '';
+            return `[${new Date(msg.createdTimestamp).toLocaleString('hr-HR')}] ${msg.author.tag}: ${msg.content || ''}${attachments}`;
+        }).join('\n');
+
+    const transcriptBuffer = Buffer.from(transcriptText, 'utf8');
+    const transcriptFile = { attachment: transcriptBuffer, name: `transcript-${channel.name}.txt` };
+
+    const opener = await client.users.fetch(ticket.userId).catch(() => null);
+    if (opener) {
+        await opener.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor(0x5865F2)
+                    .setTitle('📄 Transcript tiketa')
+                    .setDescription(`Tvoj tiket **${ticket.type}** je zatvorio **${interaction.user.tag}**.`)
+                    .setTimestamp(),
+            ],
+            files: [transcriptFile],
+        }).catch(() => {});
+    }
+
+    const logCh = await client.channels.fetch(TICKET_LOG_CHANNEL).catch(() => null);
+    if (logCh) {
+        await logCh.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor(0xE74C3C)
+                    .setTitle('🎫 Tiket zatvoren')
+                    .addFields(
+                        { name: 'Tip', value: ticket.type, inline: true },
+                        { name: 'Otvorio', value: `<@${ticket.userId}>`, inline: true },
+                        { name: 'Zatvorio', value: `${interaction.user}`, inline: true },
+                    )
+                    .setTimestamp(),
+            ],
+            files: [transcriptFile],
+        }).catch(() => {});
+    }
+
+    delete tickets[channel.id];
+    saveTickets();
+
+    await interaction.editReply('✅ Tiket se zatvara za 5 sekundi...');
+    setTimeout(() => channel.delete().catch(() => {}), 5000);
+}
 async function updateBlacklistTable() {
     if (BLACKLIST_CHANNEL === 'ZAMIJENI_SA_ID_KANALA') return;
     const ch = await client.channels.fetch(BLACKLIST_CHANNEL).catch(()=>null);
@@ -428,6 +578,20 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     if (newState.channel && !isInAFK) {
         if (!isDeaf(oldState) && isDeaf(newState))  startAfkTimer();
         else if (isDeaf(oldState) && !isDeaf(newState)) clearAfkTimer();
+    }
+});
+
+// ─── BUTTON INTERAKCIJE ──────────────────────────────────────────────────────
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton()) return;
+    const id = interaction.customId;
+
+    if (id === 'zatvori_tiket') {
+        return closeTicket(interaction);
+    }
+
+    if (TICKET_TYPES[id]) {
+        return createTicket(interaction, id);
     }
 });
 
@@ -879,6 +1043,34 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setTitle('🔌 Disconnectani')
                 .addFields({ name: 'Kanal', value: channel.name, inline: true }, { name: 'Disconnectano', value: `${count} članova`, inline: true })
                 .setTimestamp()] });
+        }
+
+        // ── /panel-tiketa ─────────────────────────────────────────────────
+        if (commandName === 'panel-tiketa') {
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('tiket_popravka').setLabel('🔧 Popravka Oružija').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('tiket_zalbe').setLabel('📝 Žalbe').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('tiket_poso').setLabel('💼 Tiket za Poso').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('tiket_kupovina').setLabel('🛒 Kupovina Oružija').setStyle(ButtonStyle.Danger),
+            );
+            await interaction.channel.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0x5865F2)
+                        .setTitle('🎫 Panel Tiketa')
+                        .setDescription(
+                            'Odaberi kategoriju tiketa klikom na dugme ispod.\n\n' +
+                            '🔧 **Popravka Oružija** — Za popravku oružija\n' +
+                            '📝 **Žalbe** — Za žalbe i prigovore\n' +
+                            '💼 **Tiket za Poso** — Za prijave na posao\n' +
+                            '🛒 **Kupovina Oružija** — Za kupovinu oružija'
+                        )
+                        .setFooter({ text: 'Možeš imati samo jedan otvoren tiket u isto vrijeme.' })
+                        .setTimestamp(),
+                ],
+                components: [row],
+            });
+            return interaction.reply({ content: '✅ Panel tiketa postavljen!', flags: MessageFlags.Ephemeral });
         }
 
         // ── /skini-sve-role ──────────────────────────────────────────────────

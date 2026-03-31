@@ -146,6 +146,12 @@ const commands = [
         .addChannelOption(o => o.setName('kanal').setDescription('Voice kanal iz kojeg se izbacuju').setRequired(true).addChannelTypes(ChannelType.GuildVoice))
         .setDefaultMemberPermissions(PermissionFlagsBits.MoveMembers),
 
+    // ── TIKETI ──────────────────────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('panel-tiketa')
+        .setDescription('Postavlja panel za otvaranje tiketa u ovaj kanal')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
