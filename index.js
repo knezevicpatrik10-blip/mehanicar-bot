@@ -152,9 +152,10 @@ async function createTicket(interaction, typeKey) {
         }
     }
 
-    const existing = Object.entries(tickets).find(([, t]) => t.guildId === guild.id && t.userId === user.id);
-    if (existing) {
-        return interaction.reply({ content: `❌ Već imaš otvoren tiket: <#${existing[0]}>`, flags: MessageFlags.Ephemeral });
+    const existingAll = Object.entries(tickets).filter(([, t]) => t.guildId === guild.id && t.userId === user.id);
+    if (existingAll.length >= 3) {
+        const links = existingAll.map(([id]) => `<#${id}>`).join(', ');
+        return interaction.reply({ content: `❌ Već imaš 3 otvorena tiketa: ${links}`, flags: MessageFlags.Ephemeral });
     }
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
