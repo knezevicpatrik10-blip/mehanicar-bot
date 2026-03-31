@@ -97,10 +97,49 @@ const TICKET_TYPES = {
     tiket_kupovina: 'KUPOVINA ORUZIJA',
 };
 
+const TICKET_ZALBE_ROLES = [
+    '1485364494350815243',
+    '1485364494350815244',
+    '1485364494350815245',
+    '1485364494350815246',
+    '1485364494350815247',
+    '1485364494350815242',
+    '1485364494350815250',
+];
+
+const TICKET_DESCRIPTIONS = {
+    tiket_popravka:
+        '**Vase Ime:**\n> \u200b\n' +
+        '**Sta Popravljate:**\n> \u200b\n' +
+        '**Koja Kolicina:**\n> \u200b',
+    tiket_zalbe:
+        '**Vase Ime na Licnoj:**\n> \u200b\n' +
+        '**Vas Broj:**\n> \u200b\n' +
+        '**Na Koga se Zalite:**\n> \u200b',
+    tiket_poso:
+        '**Kolko godina imate:**\n> \u200b\n' +
+        '**Dali ste bili negdje zaposleni prije:**\n> \u200b\n' +
+        '**Koliko Sati Mozete Provest Igrajuci:**\n> \u200b',
+    tiket_kupovina:
+        '**Vase Ime:**\n> \u200b\n' +
+        '**Koliko zelite:**\n> \u200b\n' +
+        '**Sta zelite kupiti:**\n> \u200b',
+};
+
 async function createTicket(interaction, typeKey) {
     const typeName = TICKET_TYPES[typeKey];
     const guild = interaction.guild;
     const user = interaction.user;
+
+    // Provjera role za zalbe
+    if (typeKey === 'tiket_zalbe') {
+        const hasZalbeRole = interaction.member.roles.cache.some(r => TICKET_ZALBE_ROLES.includes(r.id));
+        const isAdmin = interaction.member.permissions.has(PermissionFlagsBits.Administrator);
+        if (!hasZalbeRole && !isAdmin) {
+            return interaction.reply({ content: '❌ Nemate permisiju za otvaranje ovog tiketa.', flags: MessageFlags.Ephemeral });
+        }
+    }
+
     const existing = Object.entries(tickets).find(([, t]) => t.guildId === guild.id && t.userId === user.id);
     if (existing) {
         return interaction.reply({ content: `❌ Već imaš otvoren tiket: <#${existing[0]}>`, flags: MessageFlags.Ephemeral });
@@ -151,7 +190,11 @@ async function createTicket(interaction, typeKey) {
             new EmbedBuilder()
                 .setColor(0x5865F2)
                 .setTitle(`🎫 ${typeName}`)
-                .setDescription('Napiši detaljno šta ti treba. Kada je gotovo, osoblje može zatvoriti tiket dugmetom ispod.')
+                .setDescription(
+                    TICKET_DESCRIPTIONS[typeKey] +
+                    '\n\n*Popuni polja iznad. Osoblje će te kontaktirati uskoro.*'
+                )
+                .setFooter({ text: 'Osoblje zatvara tiket dugmetom ispod kada je gotovo.' })
                 .setTimestamp(),
         ],
         components: [closeRow],
