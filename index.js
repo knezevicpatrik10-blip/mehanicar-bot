@@ -109,24 +109,24 @@ const TICKET_ZALBE_ROLES = [
 
 const TICKET_FIELDS = {
     tiket_popravka: [
-        { name: '\ud83d\udc64 Vase Ime',       value: '\u200b', inline: false },
-        { name: '\ud83d\udd27 Sta Popravljate', value: '\u200b', inline: false },
-        { name: '\ud83d\udce6 Koja Kolicina',   value: '\u200b', inline: false },
+        { name: 'Vase Ime',       value: '\u200b', inline: false },
+        { name: 'Sta Popravljate', value: '\u200b', inline: false },
+        { name: 'Koja Kolicina',   value: '\u200b', inline: false },
     ],
     tiket_zalbe: [
-        { name: '\ud83d\udc64 Vase Ime na Licnoj', value: '\u200b', inline: false },
-        { name: '\ud83d\udcde Vas Broj',           value: '\u200b', inline: false },
-        { name: '\u26a0\ufe0f Na Koga se Zalite',  value: '\u200b', inline: false },
+        { name: 'Vase Ime na Licnoj', value: '\u200b', inline: false },
+        { name: 'Vas Broj',           value: '\u200b', inline: false },
+        { name: 'Na Koga se Zalite',  value: '\u200b', inline: false },
     ],
     tiket_poso: [
-        { name: '\ud83d\udcc5 Koliko godina imate',                    value: '\u200b', inline: false },
-        { name: '\ud83c\udfe2 Dali ste bili negdje zaposleni prije',   value: '\u200b', inline: false },
-        { name: '\u23f0 Koliko Sati Mozete Provest Igrajuci',          value: '\u200b', inline: false },
+        { name: 'Koliko godina imate',                    value: '\u200b', inline: false },
+        { name: 'Dali ste bili negdje zaposleni prije',   value: '\u200b', inline: false },
+        { name: 'Koliko Sati Mozete Provest Igrajuci',    value: '\u200b', inline: false },
     ],
     tiket_kupovina: [
-        { name: '\ud83d\udc64 Vase Ime',      value: '\u200b', inline: false },
-        { name: '\ud83d\udd22 Koliko zelite', value: '\u200b', inline: false },
-        { name: '\ud83d\uded2 Sta zelite kupiti', value: '\u200b', inline: false },
+        { name: 'Vase Ime',         value: '\u200b', inline: false },
+        { name: 'Koliko zelite',    value: '\u200b', inline: false },
+        { name: 'Sta zelite kupiti', value: '\u200b', inline: false },
     ],
 };
 
@@ -206,10 +206,9 @@ async function createTicket(interaction, typeKey) {
         embeds: [
             new EmbedBuilder()
                 .setColor(0x5865F2)
-                .setTitle(`\ud83c\udfab ${typeName}`)
-                .setDescription('Popuni sva polja ispod. Upiši odgovore direktno u chat ispod ovog embeda, osoblje \u0107e te kontaktirati uskoro.')
+                .setTitle(typeName)
                 .addFields(...TICKET_FIELDS[typeKey])
-                .setFooter({ text: 'Osoblje zatvara tiket dugmetom ispod kada je gotovo.' })
+                .setFooter({ text: 'Upiši odgovore u chat ispod. Osoblje će te kontaktirati uskoro.' })
                 .setTimestamp(),
         ],
         components: [closeRow],
