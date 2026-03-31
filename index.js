@@ -1,0 +1,936 @@
+require('dotenv').config();
+const { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, MessageFlags } = require('discord.js');
+const fs = require('fs');
+const path                = require('path');
+const ffmpegStatic        = require('ffmpeg-static');
+const { constants: ytc }  = require('youtube-dl-exec');
+// Dodaj ffmpeg u PATH
+process.env.PATH = path.dirname(ffmpegStatic) + path.delimiter + process.env.PATH;
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType } = require('@discordjs/voice');
+const { spawn } = require('child_process');
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,   // Privileged intent – 
+        GatewayIntentBits.GuildMembers,     // Privileged intent – 
+        GatewayIntentBits.GuildModeration,  // Za ban/unban 
+        GatewayIntentBits.GuildVoiceStates, // Za VC tracking
+    ]
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+const RANK_HIERARCHY = [
+    '1485364494350815246', 
+    '1485364494350815244', 
+    '1485364494350815243', 
+    '1485364494325645508', 
+];
+// ═══════════════════════════════════════════════════════════════════════════════
+const IMAGE_ONLY_CHANNEL = ['1485364495650918438','1486088080837312666']; 
+const TEXT_ONLY_CHANNEL  = '1485364495650918437';    
+const OPOMENA_CHANNEL    = '1485364495269368000';    
+const LOG_CHANNEL        = '1485738784170704979';    
+const VOICE_LOG_CHANNEL  = '1487227227161497701';    
+const BLACKLIST_CHANNEL  = '1487814599565774899';    
+const ALLOWED_MOD_ROLES  = [
+    '1485364494359068815','1485364494350815250','1485364494350815249','1485364494359068818', // PERMISIJE NE DIRAJ JEDINO AKO TARE KAZE!
+];
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const EMOJI_REGEX  = /\p{Extended_Pictographic}|<a?:[a-zA-Z0-9_]+:[0-9]+>/u;
+const GIF_REGEX    = /(tenor\.com|giphy\.com|\.gif)/i;
+
+// ─── MongoDB ────────────────────────────────────────────────────────────────────
+const mongoose = require('mongoose');
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log('✅ MongoDB spojen'))
+    .catch(e  => console.error('❌ MongoDB:', e.message));
+
+const Data = mongoose.model('Data', new mongoose.Schema({
+    key:   { type: String, unique: true, required: true },
+    value: mongoose.Schema.Types.Mixed
+}));
+
+function dbSave(key, value) {
+    Data.findOneAndUpdate({ key }, { value }, { upsert: true }).catch(() => {});
+}
+async function loadAllData() {
+    const docs = await Data.find({}).catch(() => []);
+    for (const d of docs) {
+        if (d.key === 'warnings')   warnings   = d.value || {};
+        if (d.key === 'blacklist')  blacklist  = d.value || {};
+        if (d.key === 'vcStats')    vcStats    = d.value || {};
+        if (d.key === 'tableState') tableState = d.value || { messageId: null };
+        if (d.key === 'blState')    blState    = d.value || { messageId: null };
+    }
+    console.log('✅ Podaci učitani iz MongoDB');
+}
+
+// ─── VC Tracking setup ────────────────────────────────────────────────────────────────────
+const VC_STATS_CHANNEL  = '1485622323355586590';
+const AFK_VOICE_CHANNEL = '1485998086395396136';
+const AFK_TIMEOUT_MS    = 10 * 60 * 1000;
+const vcStartTimes      = new Map();
+const afkTimers         = new Map();
+let   vcStats    = {};
+let   warnings   = {};
+let   blacklist  = {};
+let   tableState = { messageId: null };
+let   blState    = { messageId: null };
+
+function saveVcStats()    { dbSave('vcStats',    vcStats);    }
+function saveWarnings()   { dbSave('warnings',   warnings);   }
+function saveBlacklist()  { dbSave('blacklist',  blacklist);  }
+function saveBlState()    { dbSave('blState',    blState);    }
+async function updateBlacklistTable() {
+    if (BLACKLIST_CHANNEL === 'ZAMIJENI_SA_ID_KANALA') return;
+    const ch = await client.channels.fetch(BLACKLIST_CHANNEL).catch(()=>null);
+    if (!ch) return;
+    const embed = new EmbedBuilder().setColor(0xE74C3C).setTitle('🚫 Blacklista').setTimestamp().setFooter({ text:'Zadnje ažurirano' });
+    const entries = Object.entries(blacklist);
+    embed.setDescription(entries.length === 0
+        ? '✅ Blacklista je prazna.'
+        : entries.map(([uid,d],i) => `**${i+1}.** <@${uid}> — ${d.reason} \`${new Date(d.timestamp).toLocaleDateString('hr-HR')}\` | Dodao: **${d.addedBy}**`).join('\n')
+    );
+    if (blState.messageId) {
+        try { const m = await ch.messages.fetch(blState.messageId); await m.edit({ embeds:[embed] }); return; } catch {}
+    }
+    const m = await ch.send({ embeds:[embed] }).catch(()=>null);
+    if (m) { blState.messageId = m.id; saveBlState(); }
+}
+
+function saveTableState() { dbSave('tableState', tableState); }
+
+async function updateWarningsTable() {
+    const ch = await client.channels.fetch(OPOMENA_CHANNEL).catch(() => null);
+    if (!ch) return;
+
+    const entries = Object.entries(warnings)
+        .filter(([, list]) => list.length > 0)
+        .sort((a, b) => b[1].length - a[1].length);
+
+    const embed = new EmbedBuilder()
+        .setColor(0xFF6B00)
+        .setTitle('📋 Tablica Opomena')
+        .setTimestamp()
+        .setFooter({ text: 'Zadnje ažurirano' });
+
+    if (entries.length === 0) {
+        embed.setDescription('✅ Niko trenutno nema opomena.');
+    } else {
+        const rows = entries.map(([userId, list], i) => {
+            const last = list[list.length - 1];
+            const date = new Date(last.timestamp).toLocaleDateString('hr-HR');
+            const mod = last.moderator?.split('#')[0] ?? last.moderator;
+            return `**${i + 1}.** <@${userId}> — **${list.length}** ⚠️ | Zadnja: ${last.reason} \`${date}\` | Dao: **${mod}**`;
+        }).join('\n');
+        embed.setDescription(rows);
+    }
+
+    // Pokušaj editovat postojeću poruku
+    if (tableState.messageId) {
+        try {
+            const msg = await ch.messages.fetch(tableState.messageId);
+            await msg.edit({ embeds: [embed] });
+            return;
+        } catch { /* poruka ne postoji, kreiraj novu */ }
+    }
+
+    // Kreiraj novu poruku i zapamći ID
+    const msg = await ch.send({ embeds: [embed] }).catch(() => null);
+    if (msg) {
+        tableState.messageId = msg.id;
+        saveTableState();
+    }
+}
+
+function scheduleDailyReset() {
+    const now    = new Date();
+    const next6  = new Date();
+    next6.setHours(6, 0, 0, 0);
+    if (now >= next6) next6.setDate(next6.getDate() + 1);
+
+    const msLeft = next6 - now;
+    console.log(`⏰ Sljedeci VC reset za ${Math.round(msLeft / 60000)} minuta.`);
+
+    setTimeout(async () => {
+        const ch = await client.channels.fetch(VC_STATS_CHANNEL).catch(() => null);
+
+        // ── Pošalji summary prije reseta
+        if (ch && Object.keys(vcStats).length > 0) {
+            const sorted = Object.entries(vcStats)
+                .sort((a, b) => b[1] - a[1]);
+
+            const rows = sorted
+                .map(([userId, ms], i) => `**${i + 1}.** <@${userId}> — ${formatDuration(ms)}`)
+                .join('\n');
+
+            await ch.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0x5865F2)
+                        .setTitle(' Dnevni VC Izvještaj')
+                        .setDescription(rows)
+                        .setFooter({ text: 'Reset u 06:00 — statistike su vraćene na 0 minuta' })
+                        .setTimestamp()
+                ]
+            }).catch(() => {});
+        }
+
+        vcStats = {};
+        saveVcStats();
+        vcStartTimes.clear();
+        console.log('✅ VC statistike resetovane (06:00)');
+
+        if (ch) {
+            await ch.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xFFA500)
+                        .setTitle('🔄 VC Statistike resetovane')
+                        .setDescription('Dnevni reset u **06:00**. Sve statistike su vraćene na 0.')
+                        .setTimestamp()
+                ]
+            }).catch(() => {});
+        }
+        scheduleDailyReset();
+    }, msLeft);
+}
+function formatDuration(ms) {
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}h ${m}m ${sec}s`;
+    if (m > 0) return `${m}m ${sec}s`;
+    return `${sec}s`;
+}
+
+// ─── MUSIC PLAYER ────────────────────────────────────────────────────────────
+const musicQueues = new Map();
+async function playNext(guildId) {
+    const d = musicQueues.get(guildId);
+    if (!d || d.queue.length === 0) {
+        if (d?.conn?.state?.status !== VoiceConnectionStatus.Destroyed) d?.conn.destroy();
+        musicQueues.delete(guildId); return;
+    }
+    const { url, title } = d.queue.shift();
+    if (d.procs) for (const p of d.procs) { try { p.kill('SIGKILL'); } catch {} }
+    const yt = spawn(ytc.YOUTUBE_DL_PATH, [url,'-o','-','-q','--no-warnings','--no-playlist','-f','bestaudio/best'], { stdio:['ignore','pipe','pipe'] });
+    const ff = spawn(ffmpegStatic, ['-i','pipe:0','-c:a','libopus','-b:a','96k','-vbr','on','-f','ogg','pipe:1'], { stdio:['pipe','pipe','pipe'] });
+    yt.stdout.on('error',()=>{}); ff.stdin.on('error',()=>{}); ff.stdout.on('error',()=>{});
+    yt.stderr.on('data', l => { const s=l.toString().trim(); if(s) console.error('[YT]',s); });
+    ff.stderr.on('data',()=>{});
+    yt.stdout.pipe(ff.stdin);
+    d.procs = [yt, ff];
+    const resource = createAudioResource(ff.stdout, { inputType: StreamType.OggOpus });
+    d.player.play(resource);
+    console.log('[MUSIC] Svira:', title);
+    client.channels.fetch(VOICE_LOG_CHANNEL).then(ch => {
+        if (ch) ch.send({ embeds:[new EmbedBuilder().setColor(0x1DB954).setTitle('🎵 Sad svira').setDescription(`**${title}**`).setTimestamp()] });
+    }).catch(()=>{});
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+client.on('clientReady', async () => {
+    console.log(`✅ Bot spreman: ${client.user.tag}`);
+    client.user.setActivity('MEHANICARI ON TOP <3', { type: 3 });
+    await loadAllData();
+    scheduleDailyReset();
+});
+
+// ─── DOBRODOŠLICA ─────────────────────────────────────────────────────
+client.on('guildMemberAdd', async (member) => {
+    const ch = await client.channels.fetch('1485364494958985326').catch(() => null);
+    if (!ch) return;
+
+    await ch.send({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(0x57F287)
+                .setTitle('🎉 Dobrodošli!')
+                .setDescription(
+                    `Dobrodošli ${member} u server!\n\n` +
+                    `U slučaju da imate neko pitanje, molbu ili želju otvorite ticket \u27a3 https://discord.com/channels/1485364494325645502/1485364495269368006`
+                )
+                .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                .setImage('https://i.ibb.co/qhnv4bY/kurac2.png')
+                .setTimestamp()
+        ]
+    }).catch(() => {});
+});
+
+// ─── GOODBYE ───────────────────────────────────────────────────────────
+client.on('guildMemberRemove', async (member) => {
+    const ch = await client.channels.fetch('1485742357298020404').catch(() => null);
+    if (!ch) return;
+
+    await ch.send({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(0xE74C3C)
+                .setTitle('🚪 Korisnik je otišao')
+                .setDescription(`**${member.user.tag}** je napustio server.`)
+                .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                .setTimestamp()
+        ]
+    }).catch(() => {});
+});
+
+// ─── FILTERI KANALA ─────────────────────────────────────────────────────
+client.on('messageCreate', async (message) => {
+    if (message.author.bot || !message.guild) return;
+    const member = message.member;
+    if (!member) return;
+
+    // ── Kanal samo za slike ──────────────────────────────────────────────────
+    if (IMAGE_ONLY_CHANNEL.includes(message.channel.id)) {
+        const hasImage = message.attachments.some(a =>
+            a.contentType?.startsWith('image/') || a.contentType?.startsWith('video/')
+        );
+        if (!hasImage) {
+            await message.delete().catch(() => {});
+        }
+        return;
+    }
+
+    // ── Kanal samo za tekst poruke ───────────────────────────────────────────
+    if (TEXT_ONLY_CHANNEL !== 'ZAMIJENI_SA_ID_CHANELA' && message.channel.id === TEXT_ONLY_CHANNEL) {
+        const hasAttachment = message.attachments.size > 0;
+        const hasEmoji      = EMOJI_REGEX.test(message.content);
+        const hasGif        = GIF_REGEX.test(message.content);
+        const hasSticker    = message.stickers.size > 0;
+
+        if (hasAttachment || hasEmoji || hasGif || hasSticker) {
+            await message.delete().catch(() => {});
+        }
+    }
+});
+
+// ─── VC TRACKING ─────────────────────────────────────────────────────────────
+client.on('voiceStateUpdate', async (oldState, newState) => {
+    const member = newState.member ?? oldState.member;
+    if (!member || member.user.bot) return;
+
+    const userId     = member.id;
+    const now        = Date.now();
+    const joinedVC   = !oldState.channel && newState.channel;
+    const leftVC     = oldState.channel && !newState.channel;
+    const switchedVC = oldState.channel && newState.channel && oldState.channel.id !== newState.channel.id;
+    const isInAFK    = newState.channel?.id === AFK_VOICE_CHANNEL;
+    const wasInAFK   = oldState.channel?.id === AFK_VOICE_CHANNEL;
+
+    // ── AFK timer helpers ────────────────────────────────────────────────────
+    function clearAfkTimer() {
+        const t = afkTimers.get(userId);
+        if (t) { clearTimeout(t); afkTimers.delete(userId); }
+    }
+    function startAfkTimer() {
+        clearAfkTimer();
+        const timer = setTimeout(async () => {
+            afkTimers.delete(userId);
+            // Spremi akumulirano vrijeme prije premještanja u AFK
+            const start = vcStartTimes.get(userId);
+            if (start) {
+                vcStats[userId] = (vcStats[userId] || 0) + (Date.now() - start);
+                saveVcStats();
+                vcStartTimes.delete(userId);
+            }
+            await member.voice.setChannel(AFK_VOICE_CHANNEL).catch(() => {});
+
+            // Log u log kanal
+            const logCh = await client.channels.fetch(LOG_CHANNEL).catch(() => null);
+            if (logCh) {
+                await logCh.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x95A5A6)
+                            .setTitle('💤 Korisnik premješten u AFK')
+                            .setThumbnail(member.user.displayAvatarURL())
+                            .addFields(
+                                { name: 'Korisnik', value: `${member} (${member.user.tag})`, inline: true },
+                                { name: 'Razlog',   value: 'AFK više od 10 minuta',          inline: true }
+                            )
+                            .setTimestamp()
+                    ]
+                }).catch(() => {});
+            }
+        }, AFK_TIMEOUT_MS);
+        afkTimers.set(userId, timer);
+    }
+    function isDeaf(state) { return state.selfDeaf || state.deaf; }
+
+    // ── Pridružio se VC-u ────────────────────────────────────────────────────
+    if (joinedVC) {
+        if (!isInAFK) {
+            vcStartTimes.set(userId, now);
+            if (isDeaf(newState)) startAfkTimer();
+        }
+        return;
+    }
+
+    // ── Napustio VC ──────────────────────────────────────────────────────────
+    if (leftVC) {
+        clearAfkTimer();
+        if (!wasInAFK) {
+            const startTime = vcStartTimes.get(userId);
+            if (startTime) {
+                const sessionMs = now - startTime;
+                vcStats[userId] = (vcStats[userId] || 0) + sessionMs;
+                saveVcStats();
+                const ch = await client.channels.fetch(VC_STATS_CHANNEL).catch(() => null);
+                if (ch) {
+                    await ch.send({
+                        embeds: [
+                            new EmbedBuilder()
+                                .setColor(0x5865F2)
+                                .setTitle('🎙️ VC Sesija završena')
+                                .setThumbnail(member.user.displayAvatarURL())
+                                .addFields(
+                                    { name: 'Korisnik',   value: `${member}`,                    inline: true },
+                                    { name: 'Ova sesija', value: formatDuration(sessionMs),       inline: true },
+                                    { name: 'Ukupno',     value: formatDuration(vcStats[userId]), inline: true }
+                                )
+                                .setTimestamp()
+                        ]
+                    }).catch(() => {});
+                }
+            }
+        }
+        vcStartTimes.delete(userId);
+        return;
+    }
+
+    // ── Prebacio se u drugi kanal ────────────────────────────────────────────
+    if (switchedVC) {
+        clearAfkTimer();
+        // Spremi vrijeme iz prethodnog kanala (samo ako nije bio u AFK)
+        if (!wasInAFK) {
+            const startTime = vcStartTimes.get(userId);
+            if (startTime) {
+                vcStats[userId] = (vcStats[userId] || 0) + (now - startTime);
+                saveVcStats();
+            }
+        }
+        // Počni pratit u novom kanalu (samo ako nije AFK)
+        if (!isInAFK) {
+            vcStartTimes.set(userId, now);
+            if (isDeaf(newState)) startAfkTimer();
+        } else {
+            vcStartTimes.delete(userId);
+        }
+        return;
+    }
+
+    // ── Promjena stanja (mute/deafen) u istom kanalu ─────────────────────────
+    if (newState.channel && !isInAFK) {
+        if (!isDeaf(oldState) && isDeaf(newState))  startAfkTimer();
+        else if (isDeaf(oldState) && !isDeaf(newState)) clearAfkTimer();
+    }
+});
+
+// ─── SLASH KOMANDE ────────────────────────────────────────────────────────────
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isChatInputCommand()) return;
+
+    const { commandName, guild, user: mod } = interaction;
+    console.log(`📩 Primljena komanda: /${commandName} od ${mod.tag}`);
+
+    // ── Provjera role ────────────────────────────────────────────────────────
+    const isAdmin   = interaction.member.permissions.has(PermissionFlagsBits.Administrator);
+    const hasRole   = interaction.member.roles.cache.some(r => ALLOWED_MOD_ROLES.includes(r.id));
+    const firstRole = ALLOWED_MOD_ROLES[0];
+
+    // Samo rola iz ALLOWED_MOD_ROLES smije koristiti komande (music je za sve)
+    if (firstRole !== 'ZAMIJENI_SA_ID_ROLE' && !hasRole && !['play','stop','skip'].includes(commandName)) {
+        try {
+            return await interaction.reply({
+                content: '❌ Nemaš permisiju za korištenje bot komandi.',
+                flags: MessageFlags.Ephemeral
+            });
+        } catch { return; }
+    }
+
+    // ── /blacklista ────────────────────────────────────────────────────────────
+    if (commandName === 'blacklista') {
+        const sub    = interaction.options.getSubcommand();
+        const target = interaction.options.getUser('korisnik');
+
+        if (sub === 'dodaj') {
+            const reason = interaction.options.getString('razlog');
+            if (blacklist[target.id]) return interaction.reply({ content:`❌ ${target.tag} je već na blacklisti.`, flags:MessageFlags.Ephemeral });
+            blacklist[target.id] = { tag:target.tag, reason, addedBy:mod.tag, timestamp:new Date().toISOString() };
+            saveBlacklist();
+            await updateBlacklistTable();
+            const logCh = await client.channels.fetch(LOG_CHANNEL).catch(()=>null);
+            if (logCh) logCh.send({ embeds:[new EmbedBuilder().setColor(0xE74C3C).setTitle('🚫 Dodan na Blacklistu')
+                .setThumbnail(target.displayAvatarURL({ dynamic:true }))
+                .addFields({ name:'Korisnik', value:`${target} (${target.tag})`, inline:true }, { name:'Moderator', value:`${mod}`, inline:true }, { name:'Razlog', value:reason })
+                .setTimestamp()] }).catch(()=>{});
+            try { return await interaction.reply({ embeds:[new EmbedBuilder().setColor(0xE74C3C).setTitle('✅ Dodan na Blacklistu')
+                .addFields({ name:'Korisnik', value:`${target}`, inline:true }, { name:'Razlog', value:reason }).setTimestamp()], flags:MessageFlags.Ephemeral }); } catch { return; }
+        }
+
+        if (sub === 'ukloni') {
+            if (!blacklist[target.id]) return interaction.reply({ content:`❌ ${target.tag} nije na blacklisti.`, flags:MessageFlags.Ephemeral });
+            delete blacklist[target.id];
+            saveBlacklist();
+            await updateBlacklistTable();
+            try { return await interaction.reply({ embeds:[new EmbedBuilder().setColor(0x2ECC71).setTitle('✅ Uklonjen s Blackliste')
+                .addFields({ name:'Korisnik', value:`${target}`, inline:true }).setTimestamp()], flags:MessageFlags.Ephemeral }); } catch { return; }
+        }
+    }
+
+    // ── /glasanje ────────────────────────────────────────────────────────────
+    if (commandName === 'glasanje') {
+        const pitanje = interaction.options.getString('pitanje');
+        const opcije  = ['opcija1','opcija2','opcija3','opcija4']
+            .map(k => interaction.options.getString(k)).filter(Boolean);
+        const emojis  = ['🔵','🟡','🟢','🔴'];
+        const opis    = opcije.length === 0
+            ? '✅ **Da**\n❌ **Ne**'
+            : opcije.map((o,i) => `${emojis[i]} **${o}**`).join('\n');
+        const embed = new EmbedBuilder().setColor(0xF1C40F)
+            .setTitle('📊 ' + pitanje).setDescription(opis)
+            .setFooter({ text: `Glasanje pokrenuo: ${mod.tag}` }).setTimestamp();
+        let msg;
+        try { msg = await interaction.reply({ embeds:[embed], fetchReply:true }); } catch { return; }
+        if (opcije.length === 0) {
+            await msg.react('✅').catch(()=>{}); await msg.react('❌').catch(()=>{});
+        } else {
+            for (let i=0;i<opcije.length;i++) await msg.react(emojis[i]).catch(()=>{});
+        }
+        return;
+    }
+
+    // ── /poruka ────────────────────────────────────────────────────────────────────
+    if (commandName === 'poruka') {
+        const tekst = interaction.options.getString('tekst');
+        await interaction.channel.send(tekst).catch(() => {});
+        try { return await interaction.reply({ content: '✅ Poruka poslana!', flags: MessageFlags.Ephemeral }); }
+        catch { return; }
+    }
+
+    // ── /clear se obrađuje posebno (ephemeral) da ne briše vlastitu thinking poruku
+    if (commandName === 'clear') {
+        const broj    = interaction.options.getInteger('broj');
+        const deleted = await interaction.channel.bulkDelete(broj, true).catch(() => null);
+        try {
+            if (!deleted) {
+                return await interaction.reply({ content: '❌ Ne mogu brisati poruke (možda su starije od 14 dana).', flags: MessageFlags.Ephemeral });
+            }
+            return await interaction.reply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0x3498DB)
+                        .setTitle('🗑️ Poruke obrisane')
+                        .setDescription(`Obrisano **${deleted.size}** poruka.`)
+                        .setTimestamp()
+                ],
+                flags: MessageFlags.Ephemeral
+            });
+        } catch { return; }
+    }
+
+    try {
+        await interaction.deferReply();
+    } catch {
+        return;
+    }
+
+    try {
+        // ── /ban ─────────────────────────────────────────────────────────────
+        if (commandName === 'ban') {
+            const target = interaction.options.getUser('korisnik');
+            const reason = interaction.options.getString('razlog') ?? 'Nema razloga';
+            const member = await guild.members.fetch(target.id).catch(() => null);
+
+            if (member && !member.bannable)
+                return interaction.editReply('❌ Ne mogu banovati ovog korisnika (viši rank od mene).');
+
+            await guild.members.ban(target, { reason });
+            return interaction.editReply({
+                embeds: [modEmbed('🔨 Korisnik banovan', 0xE74C3C, target, mod, reason)]
+            });
+        }
+
+        // ── /kick ────────────────────────────────────────────────────────────
+        if (commandName === 'kick') {
+            const target = interaction.options.getUser('korisnik');
+            const reason = interaction.options.getString('razlog') ?? 'Nema razloga';
+            const member = await guild.members.fetch(target.id).catch(() => null);
+
+            if (!member)
+                return interaction.editReply('❌ Korisnik nije na serveru.');
+            if (!member.kickable)
+                return interaction.editReply('❌ Ne mogu kickovati ovog korisnika (viši rank od mene).');
+
+            await member.kick(reason);
+            return interaction.editReply({
+                embeds: [modEmbed('👢 Korisnik kickovan', 0xE67E22, target, mod, reason)]
+            });
+        }
+
+        // ── /timeout ─────────────────────────────────────────────────────────
+        if (commandName === 'timeout') {
+            const target  = interaction.options.getUser('korisnik');
+            const minutes = interaction.options.getInteger('trajanje');
+            const reason  = interaction.options.getString('razlog') ?? 'Nema razloga';
+            const member  = await guild.members.fetch(target.id).catch(() => null);
+
+            if (!member)
+                return interaction.editReply('❌ Korisnik nije na serveru.');
+
+            await member.timeout(minutes * 60 * 1000, reason);
+
+            const embed = modEmbed('⏱️ Timeout dodijeljen', 0xF1C40F, target, mod, reason);
+            embed.addFields({ name: 'Trajanje', value: `${minutes} minuta`, inline: true });
+            return interaction.editReply({ embeds: [embed] });
+        }
+
+        // ── /untimeout ───────────────────────────────────────────────────────
+        if (commandName === 'untimeout') {
+            const target = interaction.options.getUser('korisnik');
+            const member = await guild.members.fetch(target.id).catch(() => null);
+
+            if (!member)
+                return interaction.editReply('❌ Korisnik nije na serveru.');
+
+            await member.timeout(null);
+            return interaction.editReply({
+                embeds: [modEmbed('✅ Timeout uklonjen', 0x2ECC71, target, mod)]
+            });
+        }
+
+        // ── /unban ───────────────────────────────────────────────────────────
+        if (commandName === 'unban') {
+            const userId = interaction.options.getString('korisnik_id').trim();
+            const ban    = await guild.bans.fetch(userId).catch(() => null);
+
+            if (!ban)
+                return interaction.editReply('❌ Korisnik nije pronađen u ban listi.');
+
+            await guild.members.unban(userId);
+            return interaction.editReply({
+                embeds: [modEmbed('✅ Korisnik odbanovan', 0x2ECC71, ban.user, mod)]
+            });
+        }
+
+        // ── /daj-rolu ────────────────────────────────────────────────────────
+        if (commandName === 'daj-rolu') {
+            const target = interaction.options.getUser('korisnik');
+            const role   = interaction.options.getRole('rola');
+            const member = await guild.members.fetch(target.id).catch(() => null);
+
+            if (!member)
+                return interaction.editReply('❌ Korisnik nije na serveru.');
+
+            await member.roles.add(role);
+            return interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(role.color || 0x5865F2)
+                        .setTitle('✅ Rola dodijeljena')
+                        .addFields(
+                            { name: 'Korisnik',  value: `${target}`, inline: true },
+                            { name: 'Rola',      value: `${role}`,   inline: true },
+                            { name: 'Moderator', value: `${mod}`,    inline: true }
+                        )
+                        .setTimestamp()
+                ]
+            });
+        }
+
+        // ── /opomena ─────────────────────────────────────────────────────────
+        if (commandName === 'opomena') {
+            const target = interaction.options.getUser('korisnik');
+            const reason = interaction.options.getString('razlog');
+
+            if (!warnings[target.id]) warnings[target.id] = [];
+            warnings[target.id].push({
+                reason,
+                moderator: mod.tag,
+                timestamp: new Date().toISOString()
+            });
+            saveWarnings();
+
+            const count = warnings[target.id].length;
+
+            // ── Rank-down na svake 3 opomene ────────────────────────────────
+            let rankDownMsg = null;
+            console.log(`[OPOMENA] ${target.tag} ima ${count} opomena. Rank-down check: ${count % 3 === 0}`);
+            if (count % 3 === 0) {
+                const guildMember = await guild.members.fetch(target.id).catch(() => null);
+                console.log(`[RANK-DOWN] Fetchan member: ${guildMember ? 'DA' : 'NE'}`);
+                if (guildMember) {
+                    const memberRoles = [...guildMember.roles.cache.keys()];
+                    console.log(`[RANK-DOWN] Role membera: ${memberRoles.join(', ')}`);
+                    console.log(`[RANK-DOWN] Hijerarhija: ${RANK_HIERARCHY.join(', ')}`);
+                    const currentIdx = RANK_HIERARCHY.findIndex(id => guildMember.roles.cache.has(id));
+                    console.log(`[RANK-DOWN] Trenutni index u hijerarhiji: ${currentIdx}`);
+                    if (currentIdx !== -1 && currentIdx < RANK_HIERARCHY.length - 1) {
+                        const oldRoleId = RANK_HIERARCHY[currentIdx];
+                        const newRoleId = RANK_HIERARCHY[currentIdx + 1];
+                        await guildMember.roles.remove(oldRoleId).catch(e => console.error('[RANK-DOWN] Greška skidanja role:', e.message));
+                        await guildMember.roles.add(newRoleId).catch(e => console.error('[RANK-DOWN] Greška dodavanja role:', e.message));
+                        const oldRole = guild.roles.cache.get(oldRoleId);
+                        const newRole = guild.roles.cache.get(newRoleId);
+                        rankDownMsg = `📉 **Rank-down:** ${oldRole?.name ?? oldRoleId} → ${newRole?.name ?? newRoleId}`;
+                        console.log(`[RANK-DOWN] Uspješno: ${rankDownMsg}`);
+                    } else {
+                        console.log(`[RANK-DOWN] Nema rank-downa: index=${currentIdx}, max=${RANK_HIERARCHY.length - 1}`);
+                    }
+                }
+            }
+
+            await updateWarningsTable();
+
+            // Log u log kanal
+            const logCh = await client.channels.fetch(LOG_CHANNEL).catch(() => null);
+            if (logCh) {
+                await logCh.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0xFF6B00)
+                            .setTitle(`⚠️ Opomena #${count} dodijeljena`)
+                            .setThumbnail(target.displayAvatarURL({ dynamic: true }))
+                            .addFields(
+                                { name: 'Korisnik',       value: `${target} (${target.tag})`, inline: true },
+                                { name: 'Moderator',      value: `${mod}`,                   inline: true },
+                                { name: 'Ukupno',         value: `${count}`,                 inline: true },
+                                { name: 'Razlog',         value: reason },
+                                ...(rankDownMsg ? [{ name: 'Rank-down', value: rankDownMsg }] : [])
+                            )
+                            .setTimestamp()
+                    ]
+                }).catch(() => {});
+            }
+
+            return interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xFF6B00)
+                        .setTitle('⚠️ Opomena zapisana')
+                        .addFields(
+                            { name: 'Korisnik',       value: `${target}`, inline: true },
+                            { name: 'Opomena #',      value: `${count}`,  inline: true },
+                            { name: 'Razlog',         value: reason }
+                        )
+                        .setTimestamp()
+                ]
+            });
+        }
+
+        // ── /provjera ───────────────────────────────────────────────────────
+        if (commandName === 'provjera') {
+            const target = interaction.options.getUser('korisnik');
+            const list   = warnings[target.id] ?? [];
+            const count  = list.length;
+
+            const embed = new EmbedBuilder()
+                .setColor(count === 0 ? 0x2ECC71 : count < 3 ? 0xF1C40F : 0xE74C3C)
+                .setTitle(`📋 Opomene: ${target.tag}`)
+                .setThumbnail(target.displayAvatarURL({ dynamic: true }))
+                .addFields({ name: 'Ukupno opomena', value: `${count}`, inline: true })
+                .setTimestamp();
+
+            if (count > 0) {
+                const history = list
+                    .map((w, i) => `**#${i + 1}** ${w.reason} \`${new Date(w.timestamp).toLocaleDateString('hr-HR')}\` — ${w.moderator}`)
+                    .join('\n');
+                embed.addFields({ name: 'Povijest', value: history.slice(0, 1024) });
+            }
+
+            return interaction.editReply({ embeds: [embed] });
+        }
+
+        // ── /skini-opomenu ───────────────────────────────────────────────
+        if (commandName === 'skini-opomenu') {
+            const target = interaction.options.getUser('korisnik');
+
+            if (!warnings[target.id] || warnings[target.id].length === 0)
+                return interaction.editReply(`❌ ${target} nema nijednu opomenu.`);
+
+            const removed   = warnings[target.id].pop();
+            saveWarnings();
+            const remaining = warnings[target.id].length;
+
+            await updateWarningsTable();
+
+            // Log u log kanal ko je skino opomenu
+            const ch = await client.channels.fetch(LOG_CHANNEL).catch(() => null);
+            if (ch) {
+                await ch.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x2ECC71)
+                            .setTitle('❌ Opomena uklonjena')
+                            .addFields(
+                                { name: 'Korisnik',          value: `${target}`,         inline: true },
+                                { name: 'Moderator',         value: `${mod}`,            inline: true },
+                                { name: 'Preostalo opomena', value: `${remaining}`,      inline: true },
+                                { name: 'Skinuta opomena',   value: removed.reason }
+                            )
+                            .setTimestamp()
+                    ]
+                }).catch(() => {});
+            }
+
+            return interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0x2ECC71)
+                        .setTitle('✅ Opomena skinuta')
+                        .addFields(
+                            { name: 'Korisnik',          value: `${target}`,    inline: true },
+                            { name: 'Preostalo opomena', value: `${remaining}`, inline: true },
+                            { name: 'Skinuta opomena',   value: removed.reason }
+                        )
+                        .setTimestamp()
+                ]
+            });
+        }
+
+        // ── /play ────────────────────────────────────────────────────────────
+        if (commandName === 'play') {
+            const query   = interaction.options.getString('link');
+            const voiceCh = interaction.member.voice.channel;
+            if (!voiceCh) return interaction.editReply('❌ Moraš biti u voice channelu!');
+
+            // Strip playlist/radio params
+            let url = query;
+            try { const u=new URL(query); const v=u.searchParams.get('v'); if(v) url=`https://www.youtube.com/watch?v=${v}`; } catch {}
+
+            const perms = voiceCh.permissionsFor(guild.members.me);
+            if (!perms?.has(PermissionFlagsBits.Connect) || !perms?.has(PermissionFlagsBits.Speak))
+                return interaction.editReply('❌ Bot nema Connect/Speak dozvolu u tom kanalu!');
+
+            let d = musicQueues.get(guild.id);
+            if (!d) {
+                const conn = joinVoiceChannel({ channelId:voiceCh.id, guildId:guild.id, adapterCreator:guild.voiceAdapterCreator, selfDeaf:false });
+                await entersState(conn, VoiceConnectionStatus.Ready, 10_000).catch(()=>{});
+                const player = createAudioPlayer();
+                conn.subscribe(player);
+                player.on(AudioPlayerStatus.Idle, ()=>playNext(guild.id));
+                player.on('error', err=>{ console.error('[PLAYER]',err.message); playNext(guild.id); });
+                d = { conn, player, queue:[], procs:null };
+                musicQueues.set(guild.id, d);
+            }
+            d.queue.push({ url, title: url });
+            if (d.player.state.status === AudioPlayerStatus.Idle) playNext(guild.id);
+            return interaction.editReply({ embeds:[new EmbedBuilder().setColor(0x1DB954).setTitle('✅ Dodano u red').setDescription(`**${url}**`).setTimestamp()] });
+        }
+
+        // ── /stop ────────────────────────────────────────────────────────────
+        if (commandName === 'stop') {
+            const d = musicQueues.get(guild.id);
+            if (!d) return interaction.editReply('❌ Bot ne svira ništa.');
+            d.queue=[];
+            if (d.procs) for(const p of d.procs){try{p.kill('SIGKILL');}catch{}}
+            d.player.stop(true);
+            if (d.conn?.state?.status!==VoiceConnectionStatus.Destroyed) d.conn.destroy();
+            musicQueues.delete(guild.id);
+            return interaction.editReply({ embeds:[new EmbedBuilder().setColor(0xE74C3C).setTitle('⏹️ Zaustavljeno').setTimestamp()] });
+        }
+
+        // ── /skip ────────────────────────────────────────────────────────────
+        if (commandName === 'skip') {
+            const d = musicQueues.get(guild.id);
+            if (!d||d.player.state.status===AudioPlayerStatus.Idle) return interaction.editReply('❌ Nema pjesme.');
+            d.player.stop();
+            return interaction.editReply({ embeds:[new EmbedBuilder().setColor(0xF1C40F).setTitle('⏭️ Preskočeno').setTimestamp()] });
+        }
+
+        // ── /move-all ──────────────────────────────────────────────────
+        if (commandName === 'move-all') {
+            const fromChannel = interaction.options.getChannel('iz');
+            const toChannel   = interaction.options.getChannel('u');
+            if (fromChannel.members.size === 0)
+                return interaction.editReply('❌ Nema članova u tom kanalu.');
+            const members = [...fromChannel.members.values()];
+            const moved   = members.length;
+            await Promise.allSettled(members.map(m => m.voice.setChannel(toChannel).catch(() => {})));
+            const vlCh = await client.channels.fetch(VOICE_LOG_CHANNEL).catch(() => null);
+            if (vlCh) vlCh.send({ embeds: [new EmbedBuilder().setColor(0x5865F2).setTitle('🔀 Move All').addFields(
+                { name: 'Moderator', value: `${mod}`, inline: true },
+                { name: 'Iz', value: fromChannel.name, inline: true },
+                { name: 'U', value: toChannel.name, inline: true }
+            ).setTimestamp()] }).catch(() => {});
+            return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x5865F2).setTitle('🔀 Premješteni')
+                .addFields({ name: 'Iz', value: fromChannel.name, inline: true }, { name: 'U', value: toChannel.name, inline: true }, { name: 'Premješteno', value: `${moved} članova`, inline: true })
+                .setTimestamp()] });
+        }
+
+        // ── /disconnect-all ──────────────────────────────────────────────────
+        if (commandName === 'disconnect-all') {
+            const channel = interaction.options.getChannel('kanal');
+            if (channel.members.size === 0)
+                return interaction.editReply('❌ Nema članova u tom kanalu.');
+            const count = channel.members.size;
+            await Promise.allSettled([...channel.members.values()].map(m => m.voice.disconnect().catch(() => {})));
+            const vlCh = await client.channels.fetch(VOICE_LOG_CHANNEL).catch(() => null);
+            if (vlCh) vlCh.send({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setTitle('🔌 Disconnect All').addFields(
+                { name: 'Moderator', value: `${mod}`, inline: true },
+                { name: 'Kanal', value: channel.name, inline: true },
+                { name: 'Disconnectano', value: `${count} članova`, inline: true }
+            ).setTimestamp()] }).catch(() => {});
+            return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setTitle('🔌 Disconnectani')
+                .addFields({ name: 'Kanal', value: channel.name, inline: true }, { name: 'Disconnectano', value: `${count} članova`, inline: true })
+                .setTimestamp()] });
+        }
+
+        // ── /skini-sve-role ──────────────────────────────────────────────────
+        if (commandName === 'skini-sve-role') {
+            const target = interaction.options.getUser('korisnik');
+            const member = await guild.members.fetch(target.id).catch(() => null);
+
+            if (!member)
+                return interaction.editReply('❌ Korisnik nije na serveru.');
+
+            // Filtriramo @everyone (ne može se skinuti)
+            const roles = member.roles.cache.filter(r => r.id !== guild.id);
+            await member.roles.remove(roles);
+
+            return interaction.editReply({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xE74C3C)
+                        .setTitle('🗑️ Sve role skinute')
+                        .addFields(
+                            { name: 'Korisnik',     value: `${target}`,    inline: true },
+                            { name: 'Moderator',    value: `${mod}`,       inline: true },
+                            { name: 'Skinuto rola', value: `${roles.size}`, inline: true }
+                        )
+                        .setTimestamp()
+                ]
+            });
+        }
+
+    } catch (err) {
+        console.error(`Greška u /${commandName}:`, err);
+        interaction.editReply({ content: `❌ Greška: ${err.message}` }).catch(() => {});
+    }
+});
+
+// ─── Helper: standardni embed za mod akcije ───────────────────────────────────
+function modEmbed(title, color, target, mod, reason = null) {
+    const embed = new EmbedBuilder()
+        .setColor(color)
+        .setTitle(title)
+        .addFields(
+            { name: 'Korisnik',  value: `${target}`, inline: true },
+            { name: 'Moderator', value: `${mod}`,    inline: true }
+        )
+        .setTimestamp();
+
+    if (reason) embed.addFields({ name: 'Razlog', value: reason });
+    return embed;
+}
+
+// Spriječi crash od unhandled errora
+client.on('error', err => console.error('Client greška:', err));
+process.on('unhandledRejection', err => console.error('Unhandled rejection:', err));
+
+client.login(process.env.BOT_TOKEN);
