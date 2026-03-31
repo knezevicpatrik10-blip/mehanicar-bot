@@ -736,6 +736,11 @@ client.on('interactionCreate', async (interaction) => {
         catch { return; }
     }
 
+    // ── /close ─────────────────────────────────────────────────────
+    if (commandName === 'close') {
+        return closeTicket(interaction);
+    }
+
     // ── /clear se obrađuje posebno (ephemeral) da ne briše vlastitu thinking poruku
     if (commandName === 'clear') {
         const broj    = interaction.options.getInteger('broj');
@@ -1104,7 +1109,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setTimestamp()] });
         }
 
-        // ── /panel-tiketa ─────────────────────────────────────────────────
+        // ── /panel-tiketa
         if (commandName === 'panel-tiketa') {
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('tiket_popravka').setLabel(' Popravka Oružija').setStyle(ButtonStyle.Primary),

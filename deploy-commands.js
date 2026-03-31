@@ -152,6 +152,10 @@ const commands = [
         .setDescription('Postavlja panel za otvaranje tiketa u ovaj kanal')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
+    new SlashCommandBuilder()
+        .setName('close')
+        .setDescription('Zatvara trenutni tiket i šalje transcript'),
+
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
