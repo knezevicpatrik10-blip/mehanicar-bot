@@ -107,24 +107,36 @@ const TICKET_ZALBE_ROLES = [
     '1485364494350815250',
 ];
 
-const TICKET_DESCRIPTIONS = {
-    tiket_popravka:
-        '**Vase Ime:**\n> \u200b\n' +
-        '**Sta Popravljate:**\n> \u200b\n' +
-        '**Koja Kolicina:**\n> \u200b',
-    tiket_zalbe:
-        '**Vase Ime na Licnoj:**\n> \u200b\n' +
-        '**Vas Broj:**\n> \u200b\n' +
-        '**Na Koga se Zalite:**\n> \u200b',
-    tiket_poso:
-        '**Kolko godina imate:**\n> \u200b\n' +
-        '**Dali ste bili negdje zaposleni prije:**\n> \u200b\n' +
-        '**Koliko Sati Mozete Provest Igrajuci:**\n> \u200b',
-    tiket_kupovina:
-        '**Vase Ime:**\n> \u200b\n' +
-        '**Koliko zelite:**\n> \u200b\n' +
-        '**Sta zelite kupiti:**\n> \u200b',
+const TICKET_FIELDS = {
+    tiket_popravka: [
+        { name: '\ud83d\udc64 Vase Ime',       value: '\u200b', inline: false },
+        { name: '\ud83d\udd27 Sta Popravljate', value: '\u200b', inline: false },
+        { name: '\ud83d\udce6 Koja Kolicina',   value: '\u200b', inline: false },
+    ],
+    tiket_zalbe: [
+        { name: '\ud83d\udc64 Vase Ime na Licnoj', value: '\u200b', inline: false },
+        { name: '\ud83d\udcde Vas Broj',           value: '\u200b', inline: false },
+        { name: '\u26a0\ufe0f Na Koga se Zalite',  value: '\u200b', inline: false },
+    ],
+    tiket_poso: [
+        { name: '\ud83d\udcc5 Koliko godina imate',                    value: '\u200b', inline: false },
+        { name: '\ud83c\udfe2 Dali ste bili negdje zaposleni prije',   value: '\u200b', inline: false },
+        { name: '\u23f0 Koliko Sati Mozete Provest Igrajuci',          value: '\u200b', inline: false },
+    ],
+    tiket_kupovina: [
+        { name: '\ud83d\udc64 Vase Ime',      value: '\u200b', inline: false },
+        { name: '\ud83d\udd22 Koliko zelite', value: '\u200b', inline: false },
+        { name: '\ud83d\uded2 Sta zelite kupiti', value: '\u200b', inline: false },
+    ],
 };
+
+async function findOrCreateCategory(guild, name) {
+    const existing = guild.channels.cache.find(
+        c => c.type === ChannelType.GuildCategory && c.name === name
+    );
+    if (existing) return existing;
+    return guild.channels.create({ name, type: ChannelType.GuildCategory }).catch(() => null);
+}
 
 async function createTicket(interaction, typeKey) {
     const typeName = TICKET_TYPES[typeKey];
@@ -161,7 +173,12 @@ async function createTicket(interaction, typeKey) {
         type: ChannelType.GuildText,
         permissionOverwrites,
     };
-    if (TICKET_PARENT_CATEGORY) channelOptions.parent = TICKET_PARENT_CATEGORY;
+    if (typeKey === 'tiket_zalbe') {
+        const cat = await findOrCreateCategory(guild, '\ud83d\udcdd ZALBE');
+        if (cat) channelOptions.parent = cat.id;
+    } else if (TICKET_PARENT_CATEGORY) {
+        channelOptions.parent = TICKET_PARENT_CATEGORY;
+    }
 
     const channel = await guild.channels.create(channelOptions).catch(() => null);
     if (!channel) {
@@ -189,11 +206,9 @@ async function createTicket(interaction, typeKey) {
         embeds: [
             new EmbedBuilder()
                 .setColor(0x5865F2)
-                .setTitle(`🎫 ${typeName}`)
-                .setDescription(
-                    TICKET_DESCRIPTIONS[typeKey] +
-                    '\n\n*Popuni polja iznad. Osoblje će te kontaktirati uskoro.*'
-                )
+                .setTitle(`\ud83c\udfab ${typeName}`)
+                .setDescription('Popuni sva polja ispod. Upiši odgovore direktno u chat ispod ovog embeda, osoblje \u0107e te kontaktirati uskoro.')
+                .addFields(...TICKET_FIELDS[typeKey])
                 .setFooter({ text: 'Osoblje zatvara tiket dugmetom ispod kada je gotovo.' })
                 .setTimestamp(),
         ],
