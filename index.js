@@ -446,7 +446,7 @@ async function playNext(guildId) {
 // ─────────────────────────────────────────────────────────────────────────────
 client.on('clientReady', async () => {
     console.log(`✅ Bot spreman: ${client.user.tag}`);
-    client.user.setActivity('MEHANICARI ON TOP <3', { type: 3 });
+    client.user.setActivity('BENY CARTEL ON TOP <3', { type: 3 });
     await loadAllData();
     scheduleDailyReset();
 });
