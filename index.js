@@ -3,10 +3,12 @@ const { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, MessageFla
 const fs = require('fs');
 const path                = require('path');
 const ffmpegStatic        = require('ffmpeg-static');
-const playdl              = require('play-dl');
+const { YtDlpWrap }       = require('@distube/yt-dlp');
+const { spawn }           = require('child_process');
+const ytDlp               = new YtDlpWrap();
 // Dodaj ffmpeg u PATH
 process.env.PATH = path.dirname(ffmpegStatic) + path.delimiter + process.env.PATH;
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType } = require('@discordjs/voice');
 
 const client = new Client({
     intents: [
@@ -427,8 +429,24 @@ async function playNext(guildId) {
     }
     const { url, title } = d.queue.shift();
     try {
-        const stream = await playdl.stream(url, { discordPlayerCompatibility: true });
-        const resource = createAudioResource(stream.stream, { inputType: stream.type });
+        const ytArgs = [
+            url, '-o', '-', '-f', 'bestaudio/best',
+            '--no-playlist', '-q', '--no-warnings', '--no-check-certificates',
+        ];
+        if (process.env.YOUTUBE_COOKIE) {
+            ytArgs.push('--add-header', `Cookie:${process.env.YOUTUBE_COOKIE}`);
+        }
+        const ytStream = ytDlp.execStream(ytArgs);
+        const ff = spawn(ffmpegStatic, [
+            '-i', 'pipe:0', '-c:a', 'libopus', '-b:a', '96k', '-vbr', 'on', '-f', 'ogg', 'pipe:1'
+        ], { stdio: ['pipe', 'pipe', 'pipe'] });
+        ytStream.pipe(ff.stdin);
+        ytStream.on('error', () => {});
+        ff.stdin.on('error', () => {});
+        ff.stdout.on('error', () => {});
+        ff.stderr.on('data', () => {});
+        d.procs = [ff];
+        const resource = createAudioResource(ff.stdout, { inputType: StreamType.OggOpus });
         d.player.play(resource);
         console.log('[MUSIC] Svira:', title);
         client.channels.fetch(VOICE_LOG_CHANNEL).then(ch => {
@@ -441,11 +459,6 @@ async function playNext(guildId) {
 }
 
 // ─────────────────────────────────────────────────────
-if (process.env.YOUTUBE_COOKIE) {
-    playdl.setToken({ youtube: { cookie: process.env.YOUTUBE_COOKIE } })
-        .then(() => console.log('✅ YouTube cookie postavljen'))
-        .catch(e => console.error('❌ YouTube cookie greška:', e.message));
-}
 
 client.on('clientReady', async () => {
     console.log(`✅ Bot spreman: ${client.user.tag}`);
