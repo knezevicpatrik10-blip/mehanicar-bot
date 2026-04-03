@@ -440,7 +440,13 @@ async function playNext(guildId) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────
+if (process.env.YOUTUBE_COOKIE) {
+    playdl.setToken({ youtube: { cookie: process.env.YOUTUBE_COOKIE } })
+        .then(() => console.log('✅ YouTube cookie postavljen'))
+        .catch(e => console.error('❌ YouTube cookie greška:', e.message));
+}
+
 client.on('clientReady', async () => {
     console.log(`✅ Bot spreman: ${client.user.tag}`);
     client.user.setActivity('BENY CARTEL ON TOP <3', { type: 3 });
