@@ -3,11 +3,10 @@ const { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, MessageFla
 const fs = require('fs');
 const path                = require('path');
 const ffmpegStatic        = require('ffmpeg-static');
-const { constants: ytc }  = require('youtube-dl-exec');
+const playdl              = require('play-dl');
 // Dodaj ffmpeg u PATH
 process.env.PATH = path.dirname(ffmpegStatic) + path.delimiter + process.env.PATH;
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType } = require('@discordjs/voice');
-const { spawn } = require('child_process');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
 
 const client = new Client({
     intents: [
@@ -418,7 +417,7 @@ function formatDuration(ms) {
     return `${sec}s`;
 }
 
-// ─── MUSIC PLAYER ────────────────────────────────────────────────────────────
+// ─── MUSIC PLAYER ────────────────────────────────────────────────────
 const musicQueues = new Map();
 async function playNext(guildId) {
     const d = musicQueues.get(guildId);
@@ -427,20 +426,18 @@ async function playNext(guildId) {
         musicQueues.delete(guildId); return;
     }
     const { url, title } = d.queue.shift();
-    if (d.procs) for (const p of d.procs) { try { p.kill('SIGKILL'); } catch {} }
-    const yt = spawn(ytc.YOUTUBE_DL_PATH, [url,'-o','-','-q','--no-warnings','--no-playlist','-f','bestaudio/best'], { stdio:['ignore','pipe','pipe'] });
-    const ff = spawn(ffmpegStatic, ['-i','pipe:0','-c:a','libopus','-b:a','96k','-vbr','on','-f','ogg','pipe:1'], { stdio:['pipe','pipe','pipe'] });
-    yt.stdout.on('error',()=>{}); ff.stdin.on('error',()=>{}); ff.stdout.on('error',()=>{});
-    yt.stderr.on('data', l => { const s=l.toString().trim(); if(s) console.error('[YT]',s); });
-    ff.stderr.on('data',()=>{});
-    yt.stdout.pipe(ff.stdin);
-    d.procs = [yt, ff];
-    const resource = createAudioResource(ff.stdout, { inputType: StreamType.OggOpus });
-    d.player.play(resource);
-    console.log('[MUSIC] Svira:', title);
-    client.channels.fetch(VOICE_LOG_CHANNEL).then(ch => {
-        if (ch) ch.send({ embeds:[new EmbedBuilder().setColor(0x1DB954).setTitle('🎵 Sad svira').setDescription(`**${title}**`).setTimestamp()] });
-    }).catch(()=>{});
+    try {
+        const stream = await playdl.stream(url, { discordPlayerCompatibility: true });
+        const resource = createAudioResource(stream.stream, { inputType: stream.type });
+        d.player.play(resource);
+        console.log('[MUSIC] Svira:', title);
+        client.channels.fetch(VOICE_LOG_CHANNEL).then(ch => {
+            if (ch) ch.send({ embeds:[new EmbedBuilder().setColor(0x1DB954).setTitle('🎵 Sad svira').setDescription(`**${title}**`).setTimestamp()] });
+        }).catch(()=>{});
+    } catch (err) {
+        console.error('[MUSIC] Greška:', err.message);
+        playNext(guildId);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
