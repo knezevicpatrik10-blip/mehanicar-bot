@@ -126,11 +126,6 @@ const commands = [
         .addUserOption(o => o.setName('korisnik').setDescription('Korisnik kojemu se skidaju sve role').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
 
-    // ── MUSIC ────────────────────────────────────────────────────────────
-    new SlashCommandBuilder().setName('play').setDescription('Pusta pjesmu (YouTube, Spotify, naziv)')
-        .addStringOption(o => o.setName('link').setDescription('Link ili naziv pjesme').setRequired(true)),
-    new SlashCommandBuilder().setName('stop').setDescription('Zaustavlja muziku i izlazi iz VC-a'),
-    new SlashCommandBuilder().setName('skip').setDescription('Preskace trenutnu pjesmu'),
 
     // ── VOICE UTILS
     new SlashCommandBuilder()

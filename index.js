@@ -1,14 +1,5 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType } = require('discord.js');
-const fs = require('fs');
-const path                = require('path');
-const ffmpegStatic        = require('ffmpeg-static');
-const { YtDlpWrap }       = require('@distube/yt-dlp');
-const { spawn }           = require('child_process');
-const ytDlp               = new YtDlpWrap();
-// Dodaj ffmpeg u PATH
-process.env.PATH = path.dirname(ffmpegStatic) + path.delimiter + process.env.PATH;
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType } = require('@discordjs/voice');
 
 const client = new Client({
     intents: [
@@ -419,44 +410,6 @@ function formatDuration(ms) {
     return `${sec}s`;
 }
 
-// ─── MUSIC PLAYER ────────────────────────────────────────────────────
-const musicQueues = new Map();
-async function playNext(guildId) {
-    const d = musicQueues.get(guildId);
-    if (!d || d.queue.length === 0) {
-        if (d?.conn?.state?.status !== VoiceConnectionStatus.Destroyed) d?.conn.destroy();
-        musicQueues.delete(guildId); return;
-    }
-    const { url, title } = d.queue.shift();
-    try {
-        const ytArgs = [
-            url, '-o', '-', '-f', 'bestaudio/best',
-            '--no-playlist', '-q', '--no-warnings', '--no-check-certificates',
-        ];
-        if (process.env.YOUTUBE_COOKIE) {
-            ytArgs.push('--add-header', `Cookie:${process.env.YOUTUBE_COOKIE}`);
-        }
-        const ytStream = ytDlp.execStream(ytArgs);
-        const ff = spawn(ffmpegStatic, [
-            '-i', 'pipe:0', '-c:a', 'libopus', '-b:a', '96k', '-vbr', 'on', '-f', 'ogg', 'pipe:1'
-        ], { stdio: ['pipe', 'pipe', 'pipe'] });
-        ytStream.pipe(ff.stdin);
-        ytStream.on('error', () => {});
-        ff.stdin.on('error', () => {});
-        ff.stdout.on('error', () => {});
-        ff.stderr.on('data', () => {});
-        d.procs = [ff];
-        const resource = createAudioResource(ff.stdout, { inputType: StreamType.OggOpus });
-        d.player.play(resource);
-        console.log('[MUSIC] Svira:', title);
-        client.channels.fetch(VOICE_LOG_CHANNEL).then(ch => {
-            if (ch) ch.send({ embeds:[new EmbedBuilder().setColor(0x1DB954).setTitle('🎵 Sad svira').setDescription(`**${title}**`).setTimestamp()] });
-        }).catch(()=>{});
-    } catch (err) {
-        console.error('[MUSIC] Greška:', err.message);
-        playNext(guildId);
-    }
-}
 
 // ─────────────────────────────────────────────────────
 
@@ -683,8 +636,8 @@ client.on('interactionCreate', async (interaction) => {
     const hasRole   = interaction.member.roles.cache.some(r => ALLOWED_MOD_ROLES.includes(r.id));
     const firstRole = ALLOWED_MOD_ROLES[0];
 
-    // Samo rola iz ALLOWED_MOD_ROLES smije koristiti komande (music je za sve)
-    if (firstRole !== 'ZAMIJENI_SA_ID_ROLE' && !hasRole && !['play','stop','skip'].includes(commandName)) {
+    // Samo rola iz ALLOWED_MOD_ROLES smije koristiti komande
+    if (firstRole !== 'ZAMIJENI_SA_ID_ROLE' && !hasRole) {
         try {
             return await interaction.reply({
                 content: '❌ Nemaš permisiju za korištenje bot komandi.',
@@ -1038,55 +991,6 @@ client.on('interactionCreate', async (interaction) => {
             });
         }
 
-        // ── /play ────────────────────────────────────────────────────────────
-        if (commandName === 'play') {
-            const query   = interaction.options.getString('link');
-            const voiceCh = interaction.member.voice.channel;
-            if (!voiceCh) return interaction.editReply('❌ Moraš biti u voice channelu!');
-
-            // Strip playlist/radio params
-            let url = query;
-            try { const u=new URL(query); const v=u.searchParams.get('v'); if(v) url=`https://www.youtube.com/watch?v=${v}`; } catch {}
-
-            const perms = voiceCh.permissionsFor(guild.members.me);
-            if (!perms?.has(PermissionFlagsBits.Connect) || !perms?.has(PermissionFlagsBits.Speak))
-                return interaction.editReply('❌ Bot nema Connect/Speak dozvolu u tom kanalu!');
-
-            let d = musicQueues.get(guild.id);
-            if (!d) {
-                const conn = joinVoiceChannel({ channelId:voiceCh.id, guildId:guild.id, adapterCreator:guild.voiceAdapterCreator, selfDeaf:false });
-                await entersState(conn, VoiceConnectionStatus.Ready, 10_000).catch(()=>{});
-                const player = createAudioPlayer();
-                conn.subscribe(player);
-                player.on(AudioPlayerStatus.Idle, ()=>playNext(guild.id));
-                player.on('error', err=>{ console.error('[PLAYER]',err.message); playNext(guild.id); });
-                d = { conn, player, queue:[], procs:null };
-                musicQueues.set(guild.id, d);
-            }
-            d.queue.push({ url, title: url });
-            if (d.player.state.status === AudioPlayerStatus.Idle) playNext(guild.id);
-            return interaction.editReply({ embeds:[new EmbedBuilder().setColor(0x1DB954).setTitle('✅ Dodano u red').setDescription(`**${url}**`).setTimestamp()] });
-        }
-
-        // ── /stop ────────────────────────────────────────────────────────────
-        if (commandName === 'stop') {
-            const d = musicQueues.get(guild.id);
-            if (!d) return interaction.editReply('❌ Bot ne svira ništa.');
-            d.queue=[];
-            if (d.procs) for(const p of d.procs){try{p.kill('SIGKILL');}catch{}}
-            d.player.stop(true);
-            if (d.conn?.state?.status!==VoiceConnectionStatus.Destroyed) d.conn.destroy();
-            musicQueues.delete(guild.id);
-            return interaction.editReply({ embeds:[new EmbedBuilder().setColor(0xE74C3C).setTitle('⏹️ Zaustavljeno').setTimestamp()] });
-        }
-
-        // ── /skip ────────────────────────────────────────────────────────────
-        if (commandName === 'skip') {
-            const d = musicQueues.get(guild.id);
-            if (!d||d.player.state.status===AudioPlayerStatus.Idle) return interaction.editReply('❌ Nema pjesme.');
-            d.player.stop();
-            return interaction.editReply({ embeds:[new EmbedBuilder().setColor(0xF1C40F).setTitle('⏭️ Preskočeno').setTimestamp()] });
-        }
 
         // ── /move-all ──────────────────────────────────────────────────
         if (commandName === 'move-all') {
