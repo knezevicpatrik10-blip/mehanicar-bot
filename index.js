@@ -548,32 +548,6 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // ── Tablica znački ─────────────────────────────────────────────
-    if (message.channel.id === ZNACKE_CHANNEL) {
-        await message.delete().catch(() => {});
-        const match = message.content.trim().match(/^(\d{1,3})\s+(.+)$/);
-        if (!match) {
-            const err = await message.channel.send(`❌ ${message.author} Format: \`001 Ime Prezime\``);
-            setTimeout(() => err.delete().catch(() => {}), 5000);
-            return;
-        }
-        const numInt = parseInt(match[1]);
-        if (numInt < 0 || numInt > 600) {
-            const err = await message.channel.send(`❌ ${message.author} Broj mora biti između 000 i 600.`);
-            setTimeout(() => err.delete().catch(() => {}), 5000);
-            return;
-        }
-        const num = String(numInt).padStart(3, '0');
-        if (znacke[num]) {
-            const err = await message.channel.send(`❌ ${message.author} Značka **${num}** je već zauzeta od **${znacke[num].ime}**.`);
-            setTimeout(() => err.delete().catch(() => {}), 5000);
-            return;
-        }
-        znacke[num] = { ime: match[2].trim(), userId: message.author.id, timestamp: new Date().toISOString() };
-        saveZnacke();
-        await updateZnackeTable();
-        return;
-    }
 });
 
 // ─── VC TRACKING ─────────────────────────────────────────────────────────────
