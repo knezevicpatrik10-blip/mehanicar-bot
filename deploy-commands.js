@@ -168,6 +168,17 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
     new SlashCommandBuilder()
+        .setName('tablica-znacki')
+        .setDescription('Postavlja/resetuje tablicu znački u kanalu')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+
+    new SlashCommandBuilder()
+        .setName('skini-znacku')
+        .setDescription('Uklanja zauzetu značku iz tablice')
+        .addStringOption(o => o.setName('broj').setDescription('Broj značke (npr. 001)').setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+
+    new SlashCommandBuilder()
         .setName('otvori')
         .setDescription('Ponovo aktivira onemogućeno dugme na panelu tiketa')
         .addStringOption(o => o

@@ -28,6 +28,7 @@ const VOICE_LOG_CHANNEL  = '1487227227161497701';
 const BLACKLIST_CHANNEL  = '1487814599565774899';    
 const TICKET_LOG_CHANNEL = '1488603717400789184';
 const TICKET_PARENT_CATEGORY = null;
+const ZNACKE_CHANNEL = '1491839471312834700';
 const ALLOWED_MOD_ROLES  = [
     '1485364494359068815','1485364494350815250','1485364494350815249','1485364494359068818', // PERMISIJE NE DIRAJ JEDINO AKO TARE KAZE!
 ];
@@ -59,7 +60,9 @@ async function loadAllData() {
         if (d.key === 'tableState') tableState = d.value || { messageId: null };
         if (d.key === 'blState')    blState    = d.value || { messageId: null };
         if (d.key === 'tickets')    tickets    = d.value || {};
-        if (d.key === 'panelState')  panelState = d.value || { messageId: null, channelId: null, disabled: [] };
+        if (d.key === 'panelState')  panelState  = d.value || { messageId: null, channelId: null, disabled: [] };
+        if (d.key === 'znacke')       znacke       = d.value || {};
+        if (d.key === 'znackeState')  znackeState  = d.value || { messageId: null };
     }
     console.log('✅ Podaci učitani iz MongoDB');
 }
@@ -76,9 +79,13 @@ let   blacklist  = {};
 let   tableState = { messageId: null };
 let   blState    = { messageId: null };
 let   tickets    = {};
-let   panelState = { messageId: null, channelId: null, disabled: [] };
+let   panelState  = { messageId: null, channelId: null, disabled: [] };
+let   znacke      = {};
+let   znackeState = { messageId: null };
 
-function savePanelState() { dbSave('panelState', panelState); }
+function savePanelState()  { dbSave('panelState',  panelState);  }
+function saveZnacke()      { dbSave('znacke',      znacke);      }
+function saveZnackeState() { dbSave('znackeState', znackeState); }
 function saveVcStats()    { dbSave('vcStats',    vcStats);    }
 function saveWarnings()   { dbSave('warnings',   warnings);   }
 function saveBlacklist()  { dbSave('blacklist',  blacklist);  }
@@ -125,7 +132,29 @@ const TICKET_FIELDS = {
     ],
 };
 
-// ─── Panel helpers ───────────────────────────────────────────────────────────
+// ─── Znacke helpers ─────────────────────────────────────────────────────
+async function updateZnackeTable() {
+    const ch = await client.channels.fetch(ZNACKE_CHANNEL).catch(() => null);
+    if (!ch) return;
+    const entries = Object.entries(znacke).sort(([a], [b]) => a.localeCompare(b));
+    const claimed = entries.length;
+    const lines = entries.map(([num, d]) => `\`${num}\` ${d.ime}`);
+    const desc = lines.length > 0 ? lines.join('\n') : '*Još niko nije upisao znacku.*';
+    const embed = new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setTitle('TABLICA ZNAČKI')
+        .setDescription(desc.slice(0, 4000))
+        .setFooter({ text: `Upisano: ${claimed}/601 | Slobodno: ${601 - claimed}` })
+        .setTimestamp();
+    if (znackeState.messageId) {
+        const msg = await ch.messages.fetch(znackeState.messageId).catch(() => null);
+        if (msg) { await msg.edit({ embeds: [embed] }).catch(() => {}); return; }
+    }
+    const msg = await ch.send({ embeds: [embed] }).catch(() => null);
+    if (msg) { znackeState.messageId = msg.id; saveZnackeState(); }
+}
+
+// ─── Panel helpers ─────────────────────────────────────────────────────
 const PANEL_BUTTONS = [
     { id: 'tiket_popravka', label: ' Popravka Oružija', style: ButtonStyle.Primary },
     { id: 'tiket_zalbe',    label: ' Žalbe',            style: ButtonStyle.Secondary },
@@ -517,6 +546,33 @@ client.on('messageCreate', async (message) => {
         if (hasAttachment || hasEmoji || hasGif || hasSticker) {
             await message.delete().catch(() => {});
         }
+    }
+
+    // ── Tablica znački ─────────────────────────────────────────────
+    if (message.channel.id === ZNACKE_CHANNEL) {
+        await message.delete().catch(() => {});
+        const match = message.content.trim().match(/^(\d{1,3})\s+(.+)$/);
+        if (!match) {
+            const err = await message.channel.send(`❌ ${message.author} Format: \`001 Ime Prezime\``);
+            setTimeout(() => err.delete().catch(() => {}), 5000);
+            return;
+        }
+        const numInt = parseInt(match[1]);
+        if (numInt < 0 || numInt > 600) {
+            const err = await message.channel.send(`❌ ${message.author} Broj mora biti između 000 i 600.`);
+            setTimeout(() => err.delete().catch(() => {}), 5000);
+            return;
+        }
+        const num = String(numInt).padStart(3, '0');
+        if (znacke[num]) {
+            const err = await message.channel.send(`❌ ${message.author} Značka **${num}** je već zauzeta od **${znacke[num].ime}**.`);
+            setTimeout(() => err.delete().catch(() => {}), 5000);
+            return;
+        }
+        znacke[num] = { ime: match[2].trim(), userId: message.author.id, timestamp: new Date().toISOString() };
+        saveZnacke();
+        await updateZnackeTable();
+        return;
     }
 });
 
@@ -1088,7 +1144,27 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '✅ Panel tiketa postavljen!', flags: MessageFlags.Ephemeral });
         }
 
-        // ── /zatvori (onemogući dugme na panelu) ─────────────────────────────
+        // ── /tablica-znacki ──────────────────────────────────────────────
+        if (commandName === 'tablica-znacki') {
+            znackeState = { messageId: null };
+            saveZnackeState();
+            await updateZnackeTable();
+            return interaction.editReply('✅ Tablica znački je postavljena.');
+        }
+
+        // ── /skini-znacku ──────────────────────────────────────────────
+        if (commandName === 'skini-znacku') {
+            const numInput = interaction.options.getString('broj').trim();
+            const num = String(parseInt(numInput)).padStart(3, '0');
+            if (!znacke[num]) return interaction.editReply(`❌ Značka **${num}** nije pronađena.`);
+            const old = znacke[num].ime;
+            delete znacke[num];
+            saveZnacke();
+            await updateZnackeTable();
+            return interaction.editReply(`✅ Značka **${num}** (${old}) je skinuta.`);
+        }
+
+        // ── /zatvori (onemogući dugme na panelu)
         if (commandName === 'zatvori') {
             const tip = interaction.options.getString('tip');
             if (!panelState.messageId) return interaction.editReply('❌ Panel nije postavljen. Prvo pokreni /panel-tiketa.');
