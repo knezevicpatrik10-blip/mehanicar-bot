@@ -1144,7 +1144,24 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '✅ Panel tiketa postavljen!', flags: MessageFlags.Ephemeral });
         }
 
-        // ── /tablica-znacki ──────────────────────────────────────────────
+        // ── /dajznacku ───────────────────────────────────────────────
+        if (commandName === 'dajznacku') {
+            const target   = interaction.options.getUser('korisnik');
+            const numInput = interaction.options.getString('broj').trim();
+            const numInt   = parseInt(numInput);
+            if (isNaN(numInt) || numInt < 0 || numInt > 600)
+                return interaction.editReply('❌ Broj mora biti između 000 i 600.');
+            const num = String(numInt).padStart(3, '0');
+            if (znacke[num])
+                return interaction.editReply(`❌ Značka **${num}** je već zauzeta od **${znacke[num].ime}**.`);
+            const ime = target.username;
+            znacke[num] = { ime, userId: target.id, timestamp: new Date().toISOString() };
+            saveZnacke();
+            await updateZnackeTable();
+            return interaction.editReply(`✅ ${target} je dobio značku **${num}**.`);
+        }
+
+        // ── /tablica-znacki ────────────────────────────────────
         if (commandName === 'tablica-znacki') {
             znackeState = { messageId: null };
             saveZnackeState();

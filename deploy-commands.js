@@ -168,6 +168,13 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
     new SlashCommandBuilder()
+        .setName('dajznacku')
+        .setDescription('Dodjeljuje značku korisniku')
+        .addUserOption(o => o.setName('korisnik').setDescription('Korisnik koji dobiva značku').setRequired(true))
+        .addStringOption(o => o.setName('broj').setDescription('Broj značke (npr. 001)').setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+
+    new SlashCommandBuilder()
         .setName('tablica-znacki')
         .setDescription('Postavlja/resetuje tablicu znački u kanalu')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
