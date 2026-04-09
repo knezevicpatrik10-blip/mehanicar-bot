@@ -59,6 +59,7 @@ async function loadAllData() {
         if (d.key === 'tableState') tableState = d.value || { messageId: null };
         if (d.key === 'blState')    blState    = d.value || { messageId: null };
         if (d.key === 'tickets')    tickets    = d.value || {};
+        if (d.key === 'panelState')  panelState = d.value || { messageId: null, channelId: null, disabled: [] };
     }
     console.log('✅ Podaci učitani iz MongoDB');
 }
@@ -75,7 +76,9 @@ let   blacklist  = {};
 let   tableState = { messageId: null };
 let   blState    = { messageId: null };
 let   tickets    = {};
+let   panelState = { messageId: null, channelId: null, disabled: [] };
 
+function savePanelState() { dbSave('panelState', panelState); }
 function saveVcStats()    { dbSave('vcStats',    vcStats);    }
 function saveWarnings()   { dbSave('warnings',   warnings);   }
 function saveBlacklist()  { dbSave('blacklist',  blacklist);  }
@@ -121,6 +124,35 @@ const TICKET_FIELDS = {
         { name: 'Sta zelite kupiti', value: '\u200b', inline: false },
     ],
 };
+
+// ─── Panel helpers ───────────────────────────────────────────────────────────
+const PANEL_BUTTONS = [
+    { id: 'tiket_popravka', label: ' Popravka Oružija', style: ButtonStyle.Primary },
+    { id: 'tiket_zalbe',    label: ' Žalbe',            style: ButtonStyle.Secondary },
+    { id: 'tiket_poso',     label: ' Tiket za Poso',   style: ButtonStyle.Success },
+    { id: 'tiket_kupovina', label: ' Kupovina Oružija', style: ButtonStyle.Danger },
+];
+
+function buildPanelRow(disabled = []) {
+    return new ActionRowBuilder().addComponents(
+        PANEL_BUTTONS.map(b =>
+            new ButtonBuilder()
+                .setCustomId(b.id)
+                .setLabel(b.label)
+                .setStyle(b.style)
+                .setDisabled(disabled.includes(b.id))
+        )
+    );
+}
+
+async function updatePanelMessage() {
+    if (!panelState.messageId || !panelState.channelId) return;
+    const ch = await client.channels.fetch(panelState.channelId).catch(() => null);
+    if (!ch) return;
+    const msg = await ch.messages.fetch(panelState.messageId).catch(() => null);
+    if (!msg) return;
+    await msg.edit({ components: [buildPanelRow(panelState.disabled)] }).catch(() => {});
+}
 
 async function findOrCreateCategory(guild, name) {
     const existing = guild.channels.cache.find(
@@ -1032,13 +1064,8 @@ client.on('interactionCreate', async (interaction) => {
 
         // ── /panel-tiketa
         if (commandName === 'panel-tiketa') {
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('tiket_popravka').setLabel(' Popravka Oružija').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('tiket_zalbe').setLabel(' Žalbe').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('tiket_poso').setLabel(' Tiket za Poso').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('tiket_kupovina').setLabel(' Kupovina Oružija').setStyle(ButtonStyle.Danger),
-            );
-            await interaction.channel.send({
+            panelState = { messageId: null, channelId: null, disabled: [] };
+            const sent = await interaction.channel.send({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0x5865F2)
@@ -1053,9 +1080,32 @@ client.on('interactionCreate', async (interaction) => {
                         .setFooter({ text: 'Mozes samo jedan tiket imat otvoren majmune!.' })
                         .setTimestamp(),
                 ],
-                components: [row],
+                components: [buildPanelRow([])],
             });
+            panelState.messageId = sent.id;
+            panelState.channelId = sent.channelId;
+            savePanelState();
             return interaction.reply({ content: '✅ Panel tiketa postavljen!', flags: MessageFlags.Ephemeral });
+        }
+
+        // ── /zatvori (onemogući dugme na panelu) ─────────────────────────────
+        if (commandName === 'zatvori') {
+            const tip = interaction.options.getString('tip');
+            if (!panelState.messageId) return interaction.editReply('❌ Panel nije postavljen. Prvo pokreni /panel-tiketa.');
+            if (!panelState.disabled.includes(tip)) panelState.disabled.push(tip);
+            savePanelState();
+            await updatePanelMessage();
+            return interaction.editReply(`✅ Dugme **${tip}** je onemogućeno na panelu.`);
+        }
+
+        // ── /otvori (ponovo aktiviraj dugme na panelu) ────────────────────────
+        if (commandName === 'otvori') {
+            const tip = interaction.options.getString('tip');
+            if (!panelState.messageId) return interaction.editReply('❌ Panel nije postavljen. Prvo pokreni /panel-tiketa.');
+            panelState.disabled = panelState.disabled.filter(d => d !== tip);
+            savePanelState();
+            await updatePanelMessage();
+            return interaction.editReply(`✅ Dugme **${tip}** je ponovo aktivirano na panelu.`);
         }
 
         // ── /skini-sve-role ──────────────────────────────────────────────────

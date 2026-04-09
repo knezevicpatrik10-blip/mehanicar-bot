@@ -151,6 +151,38 @@ const commands = [
         .setName('close')
         .setDescription('Zatvara trenutni tiket i šalje transcript'),
 
+    new SlashCommandBuilder()
+        .setName('zatvori')
+        .setDescription('Onemogućava odabrano dugme na panelu tiketa')
+        .addStringOption(o => o
+            .setName('tip')
+            .setDescription('Koji tip tiketa onemogućiti')
+            .setRequired(true)
+            .addChoices(
+                { name: 'Popravka Oružija', value: 'tiket_popravka' },
+                { name: 'Žalbe',            value: 'tiket_zalbe' },
+                { name: 'Tiket za Poso',   value: 'tiket_poso' },
+                { name: 'Kupovina Oružija', value: 'tiket_kupovina' },
+            )
+        )
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+
+    new SlashCommandBuilder()
+        .setName('otvori')
+        .setDescription('Ponovo aktivira onemogućeno dugme na panelu tiketa')
+        .addStringOption(o => o
+            .setName('tip')
+            .setDescription('Koji tip tiketa aktivirati')
+            .setRequired(true)
+            .addChoices(
+                { name: 'Popravka Oružija', value: 'tiket_popravka' },
+                { name: 'Žalbe',            value: 'tiket_zalbe' },
+                { name: 'Tiket za Poso',   value: 'tiket_poso' },
+                { name: 'Kupovina Oružija', value: 'tiket_kupovina' },
+            )
+        )
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
