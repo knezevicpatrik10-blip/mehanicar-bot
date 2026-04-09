@@ -138,7 +138,7 @@ async function updateZnackeTable() {
     if (!ch) return;
     const entries = Object.entries(znacke).sort(([a], [b]) => a.localeCompare(b));
     const claimed = entries.length;
-    const lines = entries.map(([num, d]) => `\`${num}\` ${d.ime}`);
+    const lines = entries.map(([num, d]) => `\`${num}\` <@${d.userId}>`);
     const desc = lines.length > 0 ? lines.join('\n') : '*Još niko nije upisao znacku.*';
     const embed = new EmbedBuilder()
         .setColor(0x2ECC71)
