@@ -1154,11 +1154,16 @@ client.on('interactionCreate', async (interaction) => {
             const num = String(numInt).padStart(3, '0');
             if (znacke[num])
                 return interaction.editReply(`❌ Značka **${num}** je već zauzeta od **${znacke[num].ime}**.`);
-            const ime = target.username;
+            const gMember = await guild.members.fetch(target.id).catch(() => null);
+            const baseName = gMember
+                ? gMember.displayName.replace(/^\[\d{3}\]\s*/, '')
+                : target.username;
+            const ime = baseName;
             znacke[num] = { ime, userId: target.id, timestamp: new Date().toISOString() };
             saveZnacke();
+            if (gMember) await gMember.setNickname(`[${num}] ${baseName}`).catch(() => {});
             await updateZnackeTable();
-            return interaction.editReply(`✅ ${target} je dobio značku **${num}**.`);
+            return interaction.editReply(`✅ ${target} je dobio značku **${num}** i nickname je ažuriran.`);
         }
 
         // ── /tablica-znacki ────────────────────────────────────
@@ -1174,11 +1179,16 @@ client.on('interactionCreate', async (interaction) => {
             const numInput = interaction.options.getString('broj').trim();
             const num = String(parseInt(numInput)).padStart(3, '0');
             if (!znacke[num]) return interaction.editReply(`❌ Značka **${num}** nije pronađena.`);
-            const old = znacke[num].ime;
+            const old = znacke[num];
+            const gMember = await guild.members.fetch(old.userId).catch(() => null);
+            if (gMember) {
+                const cleanNick = gMember.displayName.replace(/^\[\d{3}\]\s*/, '');
+                await gMember.setNickname(cleanNick === gMember.user.username ? null : cleanNick).catch(() => {});
+            }
             delete znacke[num];
             saveZnacke();
             await updateZnackeTable();
-            return interaction.editReply(`✅ Značka **${num}** (${old}) je skinuta.`);
+            return interaction.editReply(`✅ Značka **${num}** (${old.ime}) je skinuta i nickname je uređen.`);
         }
 
         // ── /zatvori (onemogući dugme na panelu)
