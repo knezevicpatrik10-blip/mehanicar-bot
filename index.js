@@ -93,10 +93,11 @@ function saveBlState()    { dbSave('blState',    blState);    }
 function saveTickets()    { dbSave('tickets',    tickets);    }
 
 const TICKET_TYPES = {
-    tiket_popravka: 'POPRAVKA ORUZIJA',
-    tiket_zalbe: 'TIKET ZALBE',
-    tiket_poso: 'TIKET ZA POSO',
-    tiket_kupovina: 'KUPOVINA ORUZIJA',
+    tiket_popravka:   'POPRAVKA ORUZIJA',
+    tiket_zalbe:      'TIKET ZALBE',
+    tiket_poso:       'TIKET ZA POSO',
+    tiket_kupovina:   'KUPOVINA ORUZIJA',
+    tiket_prijedlozi: 'PRIJEDLOZI',
 };
 
 const TICKET_ZALBE_ROLES = [
@@ -130,6 +131,10 @@ const TICKET_FIELDS = {
         { name: 'Koliko zelite',    value: '\u200b', inline: false },
         { name: 'Sta zelite kupiti', value: '\u200b', inline: false },
     ],
+    tiket_prijedlozi: [
+        { name: 'Vase Ime',      value: '\u200b', inline: false },
+        { name: 'Vas Prijedlog', value: '\u200b', inline: false },
+    ],
 };
 
 // ─── Znacke helpers ─────────────────────────────────────────────────────
@@ -156,10 +161,11 @@ async function updateZnackeTable() {
 
 // ─── Panel helpers ─────────────────────────────────────────────────────
 const PANEL_BUTTONS = [
-    { id: 'tiket_popravka', label: ' Popravka Oružija', style: ButtonStyle.Primary },
-    { id: 'tiket_zalbe',    label: ' Žalbe',            style: ButtonStyle.Secondary },
-    { id: 'tiket_poso',     label: ' Tiket za Poso',   style: ButtonStyle.Success },
-    { id: 'tiket_kupovina', label: ' Kupovina Oružija', style: ButtonStyle.Danger },
+    { id: 'tiket_popravka',   label: ' Popravka Oružija', style: ButtonStyle.Primary },
+    { id: 'tiket_zalbe',      label: ' Žalbe',            style: ButtonStyle.Secondary },
+    { id: 'tiket_poso',       label: ' Tiket za Poso',    style: ButtonStyle.Success },
+    { id: 'tiket_kupovina',   label: ' Kupovina Oružija', style: ButtonStyle.Danger },
+    { id: 'tiket_prijedlozi', label: ' Prijedlozi',       style: ButtonStyle.Primary },
 ];
 
 function buildPanelRow(disabled = []) {
@@ -233,8 +239,12 @@ async function createTicket(interaction, typeKey) {
         tiket_poso:     'TIKET ZA POSO',
         tiket_kupovina: 'KUPOVINA ORUZIJA',
     };
-    const cat = await findOrCreateCategory(guild, categoryNames[typeKey]);
-    if (cat) channelOptions.parent = cat.id;
+    if (typeKey === 'tiket_prijedlozi') {
+        channelOptions.parent = '1492155599796965407';
+    } else {
+        const cat = await findOrCreateCategory(guild, categoryNames[typeKey]);
+        if (cat) channelOptions.parent = cat.id;
+    }
 
     const channel = await guild.channels.create(channelOptions).catch(() => null);
     if (!channel) {
@@ -1105,7 +1115,8 @@ client.on('interactionCreate', async (interaction) => {
                             ' **Popravka Oružija** — Za popravku oružija\n' +
                             ' **Žalbe** — Za žalbe na radnike\n' +
                             ' **Tiket za Poso** — Za prijave na posao\n' +
-                            ' **Kupovina Oružija** — Za kupovinu oružija'
+                            ' **Kupovina Oružija** — Za kupovinu oružija\n' +
+                            ' **Prijedlozi** — Za prijedloge i sugestije'
                         )
                         .setFooter({ text: 'Mozes samo jedan tiket imat otvoren majmune!.' })
                         .setTimestamp(),

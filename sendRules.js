@@ -13,69 +13,41 @@ client.once('ready', async () => {
 
     const embed = new EmbedBuilder()
         .setColor(0xE74C3C)
-        .setTitle('📜  P R A V I L A  O R G A N I Z A C I J E')
+        .setTitle('P R A V I L A  O R G A N I Z A C I J E')
         .setDescription(
-            '> Svako kršenje ovih pravila dovodi do **minusa** te osobe ili **kicka** iz organizacije.\n' +
-            '> Pravila se iz dana u dan dodaju — pratite ih redovno.\n\u200b'
+            '> Svako kršenje ovih pravila dovodi do **opomene**, **otkaza** ili **kicka** iz organizacije.\n' +
+            '> Pravila se ažuriraju — pratite ih redovno.\n\u200b'
         )
         .addFields(
+            { name: '1. Pravila grada i pljački', value: 'Obavezno pročitati i naučiti **pravila grada** i **pravila pljački** na Asterixu.', inline: false },
+            { name: '2. Poštovanje igrača', value: 'Poštovati svakog igrača — pa i one s kojima se **OOC** ne slažete.', inline: false },
+            { name: '3. PIT manevar', value: 'Zabranjeno raditi **PIT** većom brzinom od **150 km/h**.', inline: false },
+            { name: '4. Zabrana tejzanja u autu', value: '**Tejzanje ljudi u autu je zabranjeno.**', inline: false },
+            { name: '5. Limit kazni', value: 'Zabranjeno pisati **više od 5 kazni**.', inline: false },
+            { name: '6. Obavezni tejzer', value: 'Svako od vas mora nositi **tejzer** — nebitno šta radili.', inline: false },
+            { name: '7. Odijelo za akciju', value: 'Na racije, pljačke ili bilo koju veću akciju nosite odijelo **„akcija"**.', inline: false },
+            { name: '8. Odijelo za patrolu', value: 'U patrolu nosite odijelo **„Patrola"**.', inline: false },
+            { name: '9. Limit potrošnog materijala', value: 'Zabranjeno nositi više od **2 komada** Hrane, Vode i Antistresa.', inline: false },
+            { name: '10. Zadržavanje lica u stanici', value: 'U slučaju da lice dovedete u stanicu radi ispitivanja, smijete ga zadržati **maksimalno 20 minuta**.', inline: false },
+            { name: '11. RP fail', value: 'Bilo koji veći RP fail = **jedna opomena**.', inline: false },
+            { name: '12. Puške i naoružanje', value: 'Ne pitaj „mogu nosit pušku". Ja nagrađujem one koji znaju koristiti i one koji zasluže — poštovanjem ovih pravila.', inline: false },
+            { name: '13. Reakcija na obavještenja', value: 'Na svako obavještenje na Discordu **obavezna reakcija u roku od 24h** — u suprotnom ide opomena.', inline: false },
+            { name: '14. Zabrana prekidanja', value: 'Dok vodim akciju ili vas opremam — **nemoj me niko prekidati dok pričam**. To je instant otkaz.', inline: false },
+            { name: '15. Svađa sa kolegama', value: 'Bilo koji toxic ili svađa sa kolegama = **otkaz obojici**, nebitno ko je kriv. Ja sam tu da riješim problem — ne vi međusobno.', inline: false },
+            { name: '16. Heli — rola Heli main', value: 'Heli **bez moje dozvole ne smijete vaditi** ako nemate rolu **Heli main**.', inline: false },
+            { name: '17. Zamjenici šefa', value: '<@464425339658043402> i <@649228430264500225> — njihova riječ vrijedi kao i moja. Hoću da se poštuju kao i bilo ko višeg čina od vas.', inline: false },
+            { name: '18. Discord VC — OBAVEZNO', value: '**VC na Discordu je obavezan.** Koga uhvatim in-game a nije na Discordu = **instant otkaz**.', inline: false },
+            { name: '19. Admin situacija', value: 'Sljedeci ko ode sa admin situacije = **otkaz odmah**. **Nema respawn u admin situaciji.**', inline: false },
+            { name: '20. Zvanje admina tokom RP-a', value: '**NEMA zvat admina dok je RP u toku!**', inline: false },
+            { name: '21. Traffic stop — limit kazni', value: 'Na traffic stopu maksimalno **3 kazne** do **15.000**.', inline: false },
+            { name: '22. Heli — dozvola direktora', value: 'Zabranjeno koristiti heli **bez dozvole direktora**.', inline: false },
             {
-                name: '  1. Zabrana psovanja',
-                value: 'U organizaciji je **strogo zabranjeno** psovanje — majke, familije, bilo čega apsolutno. Vrijedi i u bazi i u VC-u.',
+                name: '\u200b',
+                value: 'Za sad je to to. Pravila ćemo ostala manje bitna dodavati.\n\nAko imate **prijedlog** za pravila ili općenito — otvorite ticket **prijedlozi** i tagujte me.\n\nAko vam se nešto ne sviđa — otvorite ticket, ja sam uvijek otvoren za razgovor.',
                 inline: false
-            },
-            {
-                name: '  2. Zabrana trolanja i toksičnosti',
-                value: 'Zabranjen je **bilo kakav vid trolanja i toksičnog ponašanja** — nije bitno jesi li u bazi ili na lokaciji.',
-                inline: false
-            },
-            {
-                name: '  3. Zabrana krađe — provjere gepeka',
-                value: '**Krađa je zabranjena.** Provjere gepeka od sad će biti **redovne**.',
-                inline: false
-            },
-            {
-                name: '  4. Slušanje viših činova',
-                value: 'Kada vam **viši čin** nešto kaže — **morate to uraditi**. Bez prigovora.',
-                inline: false
-            },
-            {
-                name: '  5. Red u bazi',
-                value: 'Kada smo svi u bazi — **nema trčanja tamo-vamo**. Stane se u vrstu i tišina. Ima nas 30+, nije lako održavati sve.',
-                inline: false
-            },
-            {
-                name: '  6. Zabrana dranja u VC-u',
-                value: '**Dranje u VC-u je strogo zabranjeno.**',
-                inline: false
-            },
-            {
-                name: '  7. Privatna vozila — zabranjeno ulaziti u gepek',
-                value: 'Kada neko otvara **svoju privatnu vozilu** — **ne smijete ulaziti u gepek** bez dozvole vlasnika.',
-                inline: false
-            },
-            {
-                name: '  8. Tare otvara kombije — svi van mehaničarske',
-                value: 'Kada **Tare otvara kombije** radi prebacivanja i sl. — **svi apsolutno svi van mehaničarske**.',
-                inline: false
-            },
-            {
-                name: '  9. Smrt u bazi — zabrana lootanja',
-                value: 'Kada neko padne u bazi — **nema lootanja**. **Clipuje se** i šalje jednom od šefova.',
-                inline: false
-            },
-            {
-                name: '  10. Smrt na akciji — lootanje samo u iznimnim slučajevima',
-                value: 'Kada na akciji padne jedan od naših — **nema lootanja**.\n*Iznimka:* ako je pucanje još u toku i moraš mu uzeti pušku, metke, pancir...',
-                inline: false
-            },
-            {
-                name: '  11. Pravilo za Heli ',
-                value: 'Heli smije vozit određene osobe sa rollom HELI MAIN ili HELI VOZAC nitko drugi a te osobe su (Patrik,David)',
-                inline: false
-            },
+            }
         )
-        .setFooter({ text: 'Mehanicar Organizacija  •  Pravila su obavezna za sve članove' })
+        .setFooter({ text: 'Pravila su obavezna za sve članove' })
         .setTimestamp();
 
     await ch.send({ content: '@everyone', embeds: [embed] });

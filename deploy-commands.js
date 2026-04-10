@@ -163,6 +163,7 @@ const commands = [
                 { name: 'Žalbe',            value: 'tiket_zalbe' },
                 { name: 'Tiket za Poso',   value: 'tiket_poso' },
                 { name: 'Kupovina Oružija', value: 'tiket_kupovina' },
+                { name: 'Prijedlozi',      value: 'tiket_prijedlozi' },
             )
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
@@ -197,6 +198,7 @@ const commands = [
                 { name: 'Žalbe',            value: 'tiket_zalbe' },
                 { name: 'Tiket za Poso',   value: 'tiket_poso' },
                 { name: 'Kupovina Oružija', value: 'tiket_kupovina' },
+                { name: 'Prijedlozi',      value: 'tiket_prijedlozi' },
             )
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
