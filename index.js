@@ -535,7 +535,13 @@ client.on('messageCreate', async (message) => {
     const member = message.member;
     if (!member) return;
 
-    // ── Kanal samo za slike ──────────────────────────────────────────────────
+    // ── Kvacica na obavijestima ──────────────────────────────────────────
+    if (message.channel.id === '1485364495269367999') {
+        await message.react('✅').catch(() => {});
+        return;
+    }
+
+    // ── Kanal samo za slike ──────────────────────────────────────────────
     if (IMAGE_ONLY_CHANNEL.includes(message.channel.id)) {
         const hasImage = message.attachments.some(a =>
             a.contentType?.startsWith('image/') || a.contentType?.startsWith('video/')
