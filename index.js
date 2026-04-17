@@ -375,7 +375,7 @@ function scheduleDailyReset() {
                         .setColor(0x5865F2)
                         .setTitle(' Dnevni VC Izvještaj')
                         .setDescription(rows)
-                        .setFooter({ text: 'Reset u 06:00 — statistike su vraćene na 0 minuta' })
+                        .setFooter({ text: 'Reset u 08:00 — statistike su vraćene na 0 minuta' })
                         .setTimestamp()
                 ]
             }).catch(() => {});
@@ -384,7 +384,7 @@ function scheduleDailyReset() {
         vcStats = {};
         saveVcStats();
         vcStartTimes.clear();
-        console.log('✅ VC statistike resetovane (06:00)');
+        console.log('✅ VC statistike resetovane (08:00)');
 
         if (ch) {
             await ch.send({
@@ -392,7 +392,7 @@ function scheduleDailyReset() {
                     new EmbedBuilder()
                         .setColor(0xFFA500)
                         .setTitle('🔄 VC Statistike resetovane')
-                        .setDescription('Dnevni reset u **06:00**. Sve statistike su vraćene na 0.')
+                        .setDescription('Dnevni reset u **08:00**. Sve statistike su vraćene na 0.')
                         .setTimestamp()
                 ]
             }).catch(() => {});
