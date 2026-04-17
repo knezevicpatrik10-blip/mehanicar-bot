@@ -20,7 +20,7 @@ const RANK_HIERARCHY = [
     '1485364494325645508', 
 ];
 // ═══════════════════════════════════════════════════════════════════════════════
-const IMAGE_ONLY_CHANNEL = ['1485364495650918438','1486088080837312666']; 
+const IMAGE_ONLY_CHANNEL = ['1485364495650918438','1486088080837312666','1494656453829722254']; 
 const TEXT_ONLY_CHANNEL  = '1485364495650918437';    
 const OPOMENA_CHANNEL    = '1485364495269368000';    
 const LOG_CHANNEL        = '1485738784170704979';    
@@ -28,7 +28,6 @@ const VOICE_LOG_CHANNEL  = '1487227227161497701';
 const BLACKLIST_CHANNEL  = '1487814599565774899';    
 const TICKET_LOG_CHANNEL = '1488603717400789184';
 const TICKET_PARENT_CATEGORY = null;
-const ZNACKE_CHANNEL = '1491839471312834700';
 const ALLOWED_MOD_ROLES  = [
     '1485364494359068815','1485364494350815250','1485364494350815249','1485364494359068818', // PERMISIJE NE DIRAJ JEDINO AKO TARE KAZE!
 ];
@@ -60,9 +59,6 @@ async function loadAllData() {
         if (d.key === 'tableState') tableState = d.value || { messageId: null };
         if (d.key === 'blState')    blState    = d.value || { messageId: null };
         if (d.key === 'tickets')    tickets    = d.value || {};
-        if (d.key === 'panelState')  panelState  = d.value || { messageId: null, channelId: null, disabled: [] };
-        if (d.key === 'znacke')       znacke       = d.value || {};
-        if (d.key === 'znackeState')  znackeState  = d.value || { messageId: null };
     }
     console.log('✅ Podaci učitani iz MongoDB');
 }
@@ -79,13 +75,7 @@ let   blacklist  = {};
 let   tableState = { messageId: null };
 let   blState    = { messageId: null };
 let   tickets    = {};
-let   panelState  = { messageId: null, channelId: null, disabled: [] };
-let   znacke      = {};
-let   znackeState = { messageId: null };
 
-function savePanelState()  { dbSave('panelState',  panelState);  }
-function saveZnacke()      { dbSave('znacke',      znacke);      }
-function saveZnackeState() { dbSave('znackeState', znackeState); }
 function saveVcStats()    { dbSave('vcStats',    vcStats);    }
 function saveWarnings()   { dbSave('warnings',   warnings);   }
 function saveBlacklist()  { dbSave('blacklist',  blacklist);  }
@@ -93,11 +83,10 @@ function saveBlState()    { dbSave('blState',    blState);    }
 function saveTickets()    { dbSave('tickets',    tickets);    }
 
 const TICKET_TYPES = {
-    tiket_popravka:   'POPRAVKA ORUZIJA',
-    tiket_zalbe:      'TIKET ZALBE',
-    tiket_poso:       'TIKET ZA POSO',
-    tiket_kupovina:   'KUPOVINA ORUZIJA',
-    tiket_prijedlozi: 'PRIJEDLOZI',
+    tiket_popravka: 'POPRAVKA ORUZIJA',
+    tiket_zalbe: 'TIKET ZALBE',
+    tiket_poso: 'TIKET ZA POSO',
+    tiket_kupovina: 'KUPOVINA ORUZIJA',
 };
 
 const TICKET_ZALBE_ROLES = [
@@ -131,63 +120,7 @@ const TICKET_FIELDS = {
         { name: 'Koliko zelite',    value: '\u200b', inline: false },
         { name: 'Sta zelite kupiti', value: '\u200b', inline: false },
     ],
-    tiket_prijedlozi: [
-        { name: 'Vase Ime',      value: '\u200b', inline: false },
-        { name: 'Vas Prijedlog', value: '\u200b', inline: false },
-    ],
 };
-
-// ─── Znacke helpers ─────────────────────────────────────────────────────
-async function updateZnackeTable() {
-    const ch = await client.channels.fetch(ZNACKE_CHANNEL).catch(() => null);
-    if (!ch) return;
-    const entries = Object.entries(znacke).sort(([a], [b]) => a.localeCompare(b));
-    const claimed = entries.length;
-    const lines = entries.map(([num, d]) => `\`${num}\` <@${d.userId}>`);
-    const desc = lines.length > 0 ? lines.join('\n') : '*Još niko nije upisao znacku.*';
-    const embed = new EmbedBuilder()
-        .setColor(0x2ECC71)
-        .setTitle('TABLICA ZNAČKI')
-        .setDescription(desc.slice(0, 4000))
-        .setFooter({ text: `Upisano: ${claimed}/601 | Slobodno: ${601 - claimed}` })
-        .setTimestamp();
-    if (znackeState.messageId) {
-        const msg = await ch.messages.fetch(znackeState.messageId).catch(() => null);
-        if (msg) { await msg.edit({ embeds: [embed] }).catch(() => {}); return; }
-    }
-    const msg = await ch.send({ embeds: [embed] }).catch(() => null);
-    if (msg) { znackeState.messageId = msg.id; saveZnackeState(); }
-}
-
-// ─── Panel helpers ─────────────────────────────────────────────────────
-const PANEL_BUTTONS = [
-    { id: 'tiket_popravka',   label: ' Popravka Oružija', style: ButtonStyle.Primary },
-    { id: 'tiket_zalbe',      label: ' Žalbe',            style: ButtonStyle.Secondary },
-    { id: 'tiket_poso',       label: ' Tiket za Poso',    style: ButtonStyle.Success },
-    { id: 'tiket_kupovina',   label: ' Kupovina Oružija', style: ButtonStyle.Danger },
-    { id: 'tiket_prijedlozi', label: ' Prijedlozi',       style: ButtonStyle.Primary },
-];
-
-function buildPanelRow(disabled = []) {
-    return new ActionRowBuilder().addComponents(
-        PANEL_BUTTONS.map(b =>
-            new ButtonBuilder()
-                .setCustomId(b.id)
-                .setLabel(b.label)
-                .setStyle(b.style)
-                .setDisabled(disabled.includes(b.id))
-        )
-    );
-}
-
-async function updatePanelMessage() {
-    if (!panelState.messageId || !panelState.channelId) return;
-    const ch = await client.channels.fetch(panelState.channelId).catch(() => null);
-    if (!ch) return;
-    const msg = await ch.messages.fetch(panelState.messageId).catch(() => null);
-    if (!msg) return;
-    await msg.edit({ components: [buildPanelRow(panelState.disabled)] }).catch(() => {});
-}
 
 async function findOrCreateCategory(guild, name) {
     const existing = guild.channels.cache.find(
@@ -239,12 +172,8 @@ async function createTicket(interaction, typeKey) {
         tiket_poso:     'TIKET ZA POSO',
         tiket_kupovina: 'KUPOVINA ORUZIJA',
     };
-    if (typeKey === 'tiket_prijedlozi') {
-        channelOptions.parent = '1492155599796965407';
-    } else {
-        const cat = await findOrCreateCategory(guild, categoryNames[typeKey]);
-        if (cat) channelOptions.parent = cat.id;
-    }
+    const cat = await findOrCreateCategory(guild, categoryNames[typeKey]);
+    if (cat) channelOptions.parent = cat.id;
 
     const channel = await guild.channels.create(channelOptions).catch(() => null);
     if (!channel) {
@@ -535,13 +464,7 @@ client.on('messageCreate', async (message) => {
     const member = message.member;
     if (!member) return;
 
-    // ── Kvacica na obavijestima ──────────────────────────────────────────
-    if (message.channel.id === '1485364495269367999') {
-        await message.react('✅').catch(() => {});
-        return;
-    }
-
-    // ── Kanal samo za slike ──────────────────────────────────────────────
+    // ── Kanal samo za slike ──────────────────────────────────────────────────
     if (IMAGE_ONLY_CHANNEL.includes(message.channel.id)) {
         const hasImage = message.attachments.some(a =>
             a.contentType?.startsWith('image/') || a.contentType?.startsWith('video/')
@@ -563,7 +486,6 @@ client.on('messageCreate', async (message) => {
             await message.delete().catch(() => {});
         }
     }
-
 });
 
 // ─── VC TRACKING ─────────────────────────────────────────────────────────────
@@ -1110,8 +1032,13 @@ client.on('interactionCreate', async (interaction) => {
 
         // ── /panel-tiketa
         if (commandName === 'panel-tiketa') {
-            panelState = { messageId: null, channelId: null, disabled: [] };
-            const sent = await interaction.channel.send({
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('tiket_popravka').setLabel(' Popravka Oružija').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('tiket_zalbe').setLabel(' Žalbe').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('tiket_poso').setLabel(' Tiket za Poso').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('tiket_kupovina').setLabel(' Kupovina Oružija').setStyle(ButtonStyle.Danger),
+            );
+            await interaction.channel.send({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0x5865F2)
@@ -1121,85 +1048,14 @@ client.on('interactionCreate', async (interaction) => {
                             ' **Popravka Oružija** — Za popravku oružija\n' +
                             ' **Žalbe** — Za žalbe na radnike\n' +
                             ' **Tiket za Poso** — Za prijave na posao\n' +
-                            ' **Kupovina Oružija** — Za kupovinu oružija\n' +
-                            ' **Prijedlozi** — Za prijedloge i sugestije'
+                            ' **Kupovina Oružija** — Za kupovinu oružija'
                         )
                         .setFooter({ text: 'Mozes samo jedan tiket imat otvoren majmune!.' })
                         .setTimestamp(),
                 ],
-                components: [buildPanelRow([])],
+                components: [row],
             });
-            panelState.messageId = sent.id;
-            panelState.channelId = sent.channelId;
-            savePanelState();
             return interaction.reply({ content: '✅ Panel tiketa postavljen!', flags: MessageFlags.Ephemeral });
-        }
-
-        // ── /dajznacku ───────────────────────────────────────────────
-        if (commandName === 'dajznacku') {
-            const target   = interaction.options.getUser('korisnik');
-            const numInput = interaction.options.getString('broj').trim();
-            const numInt   = parseInt(numInput);
-            if (isNaN(numInt) || numInt < 0 || numInt > 600)
-                return interaction.editReply('❌ Broj mora biti između 000 i 600.');
-            const num = String(numInt).padStart(3, '0');
-            if (znacke[num])
-                return interaction.editReply(`❌ Značka **${num}** je već zauzeta od **${znacke[num].ime}**.`);
-            const gMember = await guild.members.fetch(target.id).catch(() => null);
-            const baseName = gMember
-                ? gMember.displayName.replace(/^\[\d{3}\]\s*/, '')
-                : target.username;
-            const ime = baseName;
-            znacke[num] = { ime, userId: target.id, timestamp: new Date().toISOString() };
-            saveZnacke();
-            if (gMember) await gMember.setNickname(`[${num}] ${baseName}`).catch(() => {});
-            await updateZnackeTable();
-            return interaction.editReply(`✅ ${target} je dobio značku **${num}** i nickname je ažuriran.`);
-        }
-
-        // ── /tablica-znacki ────────────────────────────────────
-        if (commandName === 'tablica-znacki') {
-            znackeState = { messageId: null };
-            saveZnackeState();
-            await updateZnackeTable();
-            return interaction.editReply('✅ Tablica znački je postavljena.');
-        }
-
-        // ── /skini-znacku ──────────────────────────────────────────────
-        if (commandName === 'skini-znacku') {
-            const numInput = interaction.options.getString('broj').trim();
-            const num = String(parseInt(numInput)).padStart(3, '0');
-            if (!znacke[num]) return interaction.editReply(`❌ Značka **${num}** nije pronađena.`);
-            const old = znacke[num];
-            const gMember = await guild.members.fetch(old.userId).catch(() => null);
-            if (gMember) {
-                const cleanNick = gMember.displayName.replace(/^\[\d{3}\]\s*/, '');
-                await gMember.setNickname(cleanNick === gMember.user.username ? null : cleanNick).catch(() => {});
-            }
-            delete znacke[num];
-            saveZnacke();
-            await updateZnackeTable();
-            return interaction.editReply(`✅ Značka **${num}** (${old.ime}) je skinuta i nickname je uređen.`);
-        }
-
-        // ── /zatvori (onemogući dugme na panelu)
-        if (commandName === 'zatvori') {
-            const tip = interaction.options.getString('tip');
-            if (!panelState.messageId) return interaction.editReply('❌ Panel nije postavljen. Prvo pokreni /panel-tiketa.');
-            if (!panelState.disabled.includes(tip)) panelState.disabled.push(tip);
-            savePanelState();
-            await updatePanelMessage();
-            return interaction.editReply(`✅ Dugme **${tip}** je onemogućeno na panelu.`);
-        }
-
-        // ── /otvori (ponovo aktiviraj dugme na panelu) ────────────────────────
-        if (commandName === 'otvori') {
-            const tip = interaction.options.getString('tip');
-            if (!panelState.messageId) return interaction.editReply('❌ Panel nije postavljen. Prvo pokreni /panel-tiketa.');
-            panelState.disabled = panelState.disabled.filter(d => d !== tip);
-            savePanelState();
-            await updatePanelMessage();
-            return interaction.editReply(`✅ Dugme **${tip}** je ponovo aktivirano na panelu.`);
         }
 
         // ── /skini-sve-role ──────────────────────────────────────────────────
