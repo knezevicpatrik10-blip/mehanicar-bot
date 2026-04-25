@@ -119,7 +119,14 @@ const commands = [
         .addUserOption(o => o.setName('korisnik').setDescription('Korisnik kojemu se skida opomena').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
-    // ── SKINI SVE ROLE ──────────────────────────────────────────────────
+    // ── DAJ SVIMA ──────────────────────────────────────────────
+    new SlashCommandBuilder()
+        .setName('dajsvima')
+        .setDescription('Daje odabranu rolu svim članovima servera')
+        .addRoleOption(o => o.setName('rola').setDescription('Rola koja se daje svima').setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+
+    // ── SKINI SVE ROLE ──────────────────────────────────────────────
     new SlashCommandBuilder()
         .setName('skini-sve-role')
         .setDescription('Skida sve role korisniku')
