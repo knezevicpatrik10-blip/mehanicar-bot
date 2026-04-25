@@ -1058,6 +1058,16 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '✅ Panel tiketa postavljen!', flags: MessageFlags.Ephemeral });
         }
 
+        // ── /skinisvima ──────────────────────────────────────────────────
+        if (commandName === 'skinisvima') {
+            const role = interaction.options.getRole('rola');
+            await interaction.editReply(`⏳ Skidčam rolu **${role.name}** svim članovima, pričekaj...`);
+            const members = await guild.members.fetch();
+            const targets = members.filter(m => !m.user.bot && m.roles.cache.has(role.id));
+            await Promise.allSettled(targets.map(m => m.roles.remove(role).catch(() => {})));
+            return interaction.editReply(`✅ Rola **${role.name}** skinuta svim članovima (${targets.size} korisnika).`);
+        }
+
         // ── /dajsvima ──────────────────────────────────────────────────
         if (commandName === 'dajsvima') {
             const role = interaction.options.getRole('rola');
