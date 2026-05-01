@@ -69,7 +69,7 @@ async function loadAllData() {
 
 // ─── VC Tracking setup ────────────────────────────────────────────────────────────────────
 const VC_STATS_CHANNEL  = '1485622323355586590';
-const AFK_VOICE_CHANNEL = '1485998086395396136';
+const AFK_VOICE_CHANNEL = '1412124372126273536';
 const AFK_TIMEOUT_MS    = 10 * 60 * 1000;
 const vcStartTimes      = new Map();
 const afkTimers         = new Map();
@@ -85,7 +85,7 @@ let   znackeState = { messageId: null };
 function saveZnacke()      { dbSave('znacke',      znacke);      }
 function saveZnackeState() { dbSave('znackeState', znackeState); }
 function saveVcStats()    { dbSave('vcStats',    vcStats);    }
-function saveWarnings()
+function saveWarnings()   { dbSave('warnings',   warnings);   }
 function saveBlacklist()  { dbSave('blacklist',  blacklist);  }
 function saveBlState()    { dbSave('blState',    blState);    }
 function saveTickets()    { dbSave('tickets',    tickets);    }
