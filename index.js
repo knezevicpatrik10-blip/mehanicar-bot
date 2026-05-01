@@ -68,7 +68,7 @@ async function loadAllData() {
 }
 
 // ─── VC Tracking setup ────────────────────────────────────────────────────────────────────
-const VC_STATS_CHANNEL  = '1485622323355586590';
+const VC_STATS_CHANNEL  = '1499888676417568879';
 const AFK_VOICE_CHANNEL = '1412124372126273536';
 const AFK_TIMEOUT_MS    = 10 * 60 * 1000;
 const vcStartTimes      = new Map();
