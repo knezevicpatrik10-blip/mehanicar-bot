@@ -24,7 +24,7 @@ const IMAGE_ONLY_CHANNEL = ['1485364495650918438','1486088080837312666','1494656
 const TEXT_ONLY_CHANNEL  = '1485364495650918437';    
 const OPOMENA_CHANNEL    = '1428485257568718969';
 const LOG_CHANNEL        = '1485738784170704979';    
-const VOICE_LOG_CHANNEL  = '1487227227161497701';    
+const VOICE_LOG_CHANNEL  = '1499888676417568879';
 const BLACKLIST_CHANNEL  = '1475993066350579775';
 const ZNACKE_CHANNEL     = '1428567778087932034';
 const TICKET_LOG_CHANNEL = '1488603717400789184';
@@ -61,6 +61,8 @@ async function loadAllData() {
         if (d.key === 'tableState') tableState = d.value || { messageId: null };
         if (d.key === 'blState')    blState    = d.value || { messageId: null };
         if (d.key === 'tickets')    tickets    = d.value || {};
+        if (d.key === 'znacke')      znacke      = d.value || {};
+        if (d.key === 'znackeState') znackeState = d.value || { messageId: null };
     }
     console.log('✅ Podaci učitani iz MongoDB');
 }
@@ -77,9 +79,13 @@ let   blacklist  = {};
 let   tableState = { messageId: null };
 let   blState    = { messageId: null };
 let   tickets    = {};
+let   znacke      = {};
+let   znackeState = { messageId: null };
 
+function saveZnacke()      { dbSave('znacke',      znacke);      }
+function saveZnackeState() { dbSave('znackeState', znackeState); }
 function saveVcStats()    { dbSave('vcStats',    vcStats);    }
-function saveWarnings()   { dbSave('warnings',   warnings);   }
+function saveWarnings()
 function saveBlacklist()  { dbSave('blacklist',  blacklist);  }
 function saveBlState()    { dbSave('blState',    blState);    }
 function saveTickets()    { dbSave('tickets',    tickets);    }
@@ -123,6 +129,27 @@ const TICKET_FIELDS = {
         { name: 'Sta zelite kupiti', value: '\u200b', inline: false },
     ],
 };
+
+async function updateZnackeTable() {
+    const ch = await client.channels.fetch(ZNACKE_CHANNEL).catch(() => null);
+    if (!ch) return;
+    const entries = Object.entries(znacke).sort(([a], [b]) => a.localeCompare(b));
+    const claimed = entries.length;
+    const lines = entries.map(([num, d]) => `\`${num}\` <@${d.userId}>`);
+    const desc = lines.length > 0 ? lines.join('\n') : '*Nema dodijeljenih značk.*';
+    const embed = new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setTitle('TABLICA ZNAČK')
+        .setDescription(desc.slice(0, 4000))
+        .setFooter({ text: `Upisano: ${claimed}` })
+        .setTimestamp();
+    if (znackeState.messageId) {
+        const msg = await ch.messages.fetch(znackeState.messageId).catch(() => null);
+        if (msg) { await msg.edit({ embeds: [embed] }).catch(() => {}); return; }
+    }
+    const msg = await ch.send({ embeds: [embed] }).catch(() => null);
+    if (msg) { znackeState.messageId = msg.id; saveZnackeState(); }
+}
 
 async function findOrCreateCategory(guild, name) {
     const existing = guild.channels.cache.find(
@@ -1080,7 +1107,51 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.editReply(`✅ Rola **${role.name}** data svim članovima (${targets.size} korisnika).`);
         }
 
-        // ── /skini-sve-role ──────────────────────────────────────────────────
+        // ── /dajznacku ──────────────────────────────────────────────────
+        if (commandName === 'dajznacku') {
+            const target   = interaction.options.getUser('korisnik');
+            const numInput = interaction.options.getString('broj').trim();
+            const numInt   = parseInt(numInput);
+            if (isNaN(numInt) || numInt < 0 || numInt > 999)
+                return interaction.editReply('❌ Broj mora biti validan.');
+            const num = String(numInt).padStart(3, '0');
+            if (znacke[num])
+                return interaction.editReply(`❌ Značka **${num}** je već zauzeta od <@${znacke[num].userId}>.`);
+            const gMember = await guild.members.fetch(target.id).catch(() => null);
+            const baseName = gMember ? gMember.displayName.replace(/^\[\d{3}\]\s*/, '') : target.username;
+            znacke[num] = { ime: baseName, userId: target.id, timestamp: new Date().toISOString() };
+            saveZnacke();
+            if (gMember) await gMember.setNickname(`[${num}] ${baseName}`).catch(() => {});
+            await updateZnackeTable();
+            return interaction.editReply(`✅ ${target} je dobio značku **${num}**. Nickname azuriran.`);
+        }
+
+        // ── /skini-znacku ───────────────────────────────────────────────
+        if (commandName === 'skini-znacku') {
+            const numInput = interaction.options.getString('broj').trim();
+            const num = String(parseInt(numInput)).padStart(3, '0');
+            if (!znacke[num]) return interaction.editReply(`❌ Značka **${num}** nije pronađena.`);
+            const old = znacke[num];
+            const gMember = await guild.members.fetch(old.userId).catch(() => null);
+            if (gMember) {
+                const cleanNick = gMember.displayName.replace(/^\[\d{3}\]\s*/, '');
+                await gMember.setNickname(cleanNick === gMember.user.username ? null : cleanNick).catch(() => {});
+            }
+            delete znacke[num];
+            saveZnacke();
+            await updateZnackeTable();
+            return interaction.editReply(`✅ Značka **${num}** je skinuta.`);
+        }
+
+        // ── /tablica-znacki ─────────────────────────────────────────────
+        if (commandName === 'tablica-znacki') {
+            znackeState = { messageId: null };
+            saveZnackeState();
+            await updateZnackeTable();
+            return interaction.editReply('✅ Tablica znački postavljena.');
+        }
+
+        // ── /skini-sve-role ──────────────────────────────────────────────────────
         if (commandName === 'skini-sve-role') {
             const target = interaction.options.getUser('korisnik');
             const member = await guild.members.fetch(target.id).catch(() => null);
