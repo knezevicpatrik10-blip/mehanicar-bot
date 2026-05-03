@@ -667,7 +667,7 @@ client.on('interactionCreate', async (interaction) => {
     const firstRole = ALLOWED_MOD_ROLES[0];
 
     // Samo rola iz ALLOWED_MOD_ROLES smije koristiti komande
-    if (firstRole !== 'ZAMIJENI_SA_ID_ROLE' && !hasRole) {
+    if (firstRole !== 'ZAMIJENI_SA_ID_ROLE' && !hasRole && !isAdmin) {
         try {
             return await interaction.reply({
                 content: '❌ Nemaš permisiju za korištenje bot komandi.',
