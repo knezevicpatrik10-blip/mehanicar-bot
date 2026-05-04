@@ -662,8 +662,9 @@ client.on('interactionCreate', async (interaction) => {
     console.log(`📩 Primljena komanda: /${commandName} od ${mod.tag}`);
 
     // ── Provjera role ────────────────────────────────────────────────────────
-    const isAdmin   = interaction.member.permissions.has(PermissionFlagsBits.Administrator);
-    const hasRole   = interaction.member.roles.cache.some(r => ALLOWED_MOD_ROLES.includes(r.id));
+    const freshMember = await guild.members.fetch(mod.id).catch(() => interaction.member);
+    const isAdmin   = freshMember.permissions.has(PermissionFlagsBits.Administrator);
+    const hasRole   = freshMember.roles.cache.some(r => ALLOWED_MOD_ROLES.includes(r.id));
     const firstRole = ALLOWED_MOD_ROLES[0];
 
     // Samo rola iz ALLOWED_MOD_ROLES smije koristiti komande
