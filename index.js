@@ -196,14 +196,20 @@ async function createTicket(interaction, typeKey) {
         type: ChannelType.GuildText,
         permissionOverwrites,
     };
+    const categoryIds = {
+        tiket_zalbe:    '1500909210349867079',
+        tiket_poso:     '1500909284928655522',
+    };
     const categoryNames = {
         tiket_popravka: 'POPRAVKA ORUZIJA',
-        tiket_zalbe:    'ZALBE',
-        tiket_poso:     'TIKET ZA POSO',
         tiket_kupovina: 'KUPOVINA ORUZIJA',
     };
-    const cat = await findOrCreateCategory(guild, categoryNames[typeKey]);
-    if (cat) channelOptions.parent = cat.id;
+    if (categoryIds[typeKey]) {
+        channelOptions.parent = categoryIds[typeKey];
+    } else {
+        const cat = await findOrCreateCategory(guild, categoryNames[typeKey]);
+        if (cat) channelOptions.parent = cat.id;
+    }
 
     const channel = await guild.channels.create(channelOptions).catch(() => null);
     if (!channel) {
