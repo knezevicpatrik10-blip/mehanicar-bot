@@ -137,6 +137,13 @@ const commands = [
         .addRoleOption(o => o.setName('rola').setDescription('Rola koja se skida svima').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
 
+    new SlashCommandBuilder()
+        .setName('skiniroll')
+        .setDescription('Skida odabranu rolu korisniku')
+        .addUserOption(o => o.setName('korisnik').setDescription('Korisnik').setRequired(true))
+        .addRoleOption(o => o.setName('rola').setDescription('Rola koja se skida').setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+
     // ── SKINI SVE ROLE
     new SlashCommandBuilder()
         .setName('skini-sve-role')

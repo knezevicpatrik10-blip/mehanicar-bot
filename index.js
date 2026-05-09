@@ -35,6 +35,7 @@ const ALLOWED_MOD_ROLES  = [
     '1500557099963514900',
     '1502388911866118205',
     '1502388650783150200',
+    '1502738627002634282',
 ];
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1249,6 +1250,22 @@ client.on('interactionCreate', async (interaction) => {
                 .addFields(
                     { name: 'Kanal', value: channel.name, inline: true },
                     { name: 'Unmutovano', value: `${count} članova`, inline: true }
+                ).setTimestamp()] });
+        }
+
+        // ── /skiniroll ───────────────────────────────────────────────
+        if (commandName === 'skiniroll') {
+            const target = interaction.options.getUser('korisnik');
+            const role   = interaction.options.getRole('rola');
+            const member = await guild.members.fetch(target.id).catch(() => null);
+            if (!member) return interaction.editReply('❌ Korisnik nije na serveru.');
+            if (!member.roles.cache.has(role.id)) return interaction.editReply(`❌ ${target} nema rolu **${role.name}**.`);
+            await member.roles.remove(role);
+            return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setTitle('✅ Rola skinuta')
+                .addFields(
+                    { name: 'Korisnik',  value: `${target}`, inline: true },
+                    { name: 'Rola',      value: `${role}`,   inline: true },
+                    { name: 'Moderator', value: `${mod}`,    inline: true }
                 ).setTimestamp()] });
         }
 
