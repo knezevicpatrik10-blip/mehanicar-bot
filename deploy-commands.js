@@ -121,8 +121,7 @@ const commands = [
 
     new SlashCommandBuilder()
         .setName('skiniopomene')
-        .setDescription('Skida SVE opomene korisniku')
-        .addUserOption(o => o.setName('korisnik').setDescription('Korisnik kojemu se skidaju sve opomene').setRequired(true))
+        .setDescription('Resetuje tablicu opomena — skida SVE opomene svim korisnicima')
         .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
     // ── DAJ SVIMA / SKINI SVIMA ──────────────────────────────────────

@@ -1009,24 +1009,22 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.editReply({ embeds: [embed] });
         }
 
-        // ── /skiniopomene (skida SVE opomene) ────────────────────
+        // ── /skiniopomene (skida SVE opomene svim korisnicima) ─────────────
         if (commandName === 'skiniopomene') {
-            const target = interaction.options.getUser('korisnik');
-            if (!warnings[target.id] || warnings[target.id].length === 0)
-                return interaction.editReply(`❌ ${target} nema nijednu opomenu.`);
-            const count = warnings[target.id].length;
-            warnings[target.id] = [];
+            const totalUsers = Object.keys(warnings).filter(id => warnings[id].length > 0).length;
+            const totalWarnings = Object.values(warnings).reduce((sum, list) => sum + list.length, 0);
+            warnings = {};
             saveWarnings();
             await updateWarningsTable();
             const ch = await client.channels.fetch(LOG_CHANNEL).catch(() => null);
-            if (ch) await ch.send({ embeds: [new EmbedBuilder().setColor(0x2ECC71).setTitle('❌ Sve opomene uklonjene')
+            if (ch) await ch.send({ embeds: [new EmbedBuilder().setColor(0x2ECC71).setTitle('❌ Sve opomene resetovane')
                 .addFields(
-                    { name: 'Korisnik',  value: `${target}`, inline: true },
-                    { name: 'Moderator', value: `${mod}`,    inline: true },
-                    { name: 'Skinuto',   value: `${count} opomena`, inline: true }
+                    { name: 'Moderator', value: `${mod}`, inline: true },
+                    { name: 'Korisnika', value: `${totalUsers}`, inline: true },
+                    { name: 'Opomena',   value: `${totalWarnings}`, inline: true }
                 ).setTimestamp()] }).catch(() => {});
-            return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x2ECC71).setTitle('✅ Sve opomene skinute')
-                .addFields({ name: 'Korisnik', value: `${target}`, inline: true }, { name: 'Skinuto', value: `${count} opomena`, inline: true })
+            return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x2ECC71).setTitle('✅ Tablica opomena resetovana')
+                .setDescription(`Skinuto **${totalWarnings}** opomena od **${totalUsers}** korisnika.`)
                 .setTimestamp()] });
         }
 
