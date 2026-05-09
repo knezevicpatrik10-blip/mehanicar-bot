@@ -33,6 +33,8 @@ const ALLOWED_MOD_ROLES  = [
     '1389740601800392904',
     '1499423754554445865',
     '1500557099963514900',
+    '1502388911866118205',
+    '1502388650783150200',
 ];
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1203,7 +1205,35 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.editReply('✅ Tablica znački postavljena.');
         }
 
-        // ── /skini-sve-role ──────────────────────────────────────────────────────
+        // ── /mute ────────────────────────────────────────────────────
+        if (commandName === 'mute') {
+            const channel = interaction.options.getChannel('kanal');
+            if (channel.members.size === 0)
+                return interaction.editReply('❌ Nema članova u tom kanalu.');
+            const count = channel.members.size;
+            await Promise.allSettled([...channel.members.values()].map(m => m.voice.setMute(true).catch(() => {})));
+            return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0xE74C3C).setTitle('🔇 Svi mutovani')
+                .addFields(
+                    { name: 'Kanal', value: channel.name, inline: true },
+                    { name: 'Mutovano', value: `${count} članova`, inline: true }
+                ).setTimestamp()] });
+        }
+
+        // ── /unmute ─────────────────────────────────────────────────
+        if (commandName === 'unmute') {
+            const channel = interaction.options.getChannel('kanal');
+            if (channel.members.size === 0)
+                return interaction.editReply('❌ Nema članova u tom kanalu.');
+            const count = channel.members.size;
+            await Promise.allSettled([...channel.members.values()].map(m => m.voice.setMute(false).catch(() => {})));
+            return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x2ECC71).setTitle('🔊 Svi unmutovani')
+                .addFields(
+                    { name: 'Kanal', value: channel.name, inline: true },
+                    { name: 'Unmutovano', value: `${count} članova`, inline: true }
+                ).setTimestamp()] });
+        }
+
+        // ── /skini-sve-role
         if (commandName === 'skini-sve-role') {
             const target = interaction.options.getUser('korisnik');
             const member = await guild.members.fetch(target.id).catch(() => null);

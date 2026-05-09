@@ -3,7 +3,7 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-const RULES_CHANNEL = '1485364495269368004';
+const RULES_CHANNEL = '1418762133125992558';
 
 client.once('ready', async () => {
     console.log('✅ Konektovan kao', client.user.tag);

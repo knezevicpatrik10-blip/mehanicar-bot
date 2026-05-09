@@ -142,6 +142,18 @@ const commands = [
 
     // ── VOICE UTILS
     new SlashCommandBuilder()
+        .setName('mute')
+        .setDescription('Server mutuje sve članove u odabranom voice kanalu')
+        .addChannelOption(o => o.setName('kanal').setDescription('Voice kanal').setRequired(true).addChannelTypes(ChannelType.GuildVoice))
+        .setDefaultMemberPermissions(PermissionFlagsBits.MuteMembers),
+
+    new SlashCommandBuilder()
+        .setName('unmute')
+        .setDescription('Skida server mute svim članovima u odabranom voice kanalu')
+        .addChannelOption(o => o.setName('kanal').setDescription('Voice kanal').setRequired(true).addChannelTypes(ChannelType.GuildVoice))
+        .setDefaultMemberPermissions(PermissionFlagsBits.MuteMembers),
+
+    new SlashCommandBuilder()
         .setName('move-all')
         .setDescription('Premješta sve članove iz jednog voice kanala u drugi')
         .addChannelOption(o => o.setName('iz').setDescription('Izvorni voice kanal').setRequired(true).addChannelTypes(ChannelType.GuildVoice))
