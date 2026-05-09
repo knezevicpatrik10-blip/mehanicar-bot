@@ -112,11 +112,17 @@ const commands = [
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
-    // ── SKINI OPOMENU ───────────────────────────────────────────────────
+    // ── SKINI OPOMENU ──────────────────────────────────────
     new SlashCommandBuilder()
         .setName('skini-opomenu')
         .setDescription('Skida zadnju opomenu korisniku')
         .addUserOption(o => o.setName('korisnik').setDescription('Korisnik kojemu se skida opomena').setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+
+    new SlashCommandBuilder()
+        .setName('skiniopomene')
+        .setDescription('Skida SVE opomene korisniku')
+        .addUserOption(o => o.setName('korisnik').setDescription('Korisnik kojemu se skidaju sve opomene').setRequired(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
     // ── DAJ SVIMA / SKINI SVIMA ──────────────────────────────────────

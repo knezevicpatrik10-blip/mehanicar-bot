@@ -1009,7 +1009,28 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.editReply({ embeds: [embed] });
         }
 
-        // ── /skini-opomenu ───────────────────────────────────────────────
+        // ── /skiniopomene (skida SVE opomene) ────────────────────
+        if (commandName === 'skiniopomene') {
+            const target = interaction.options.getUser('korisnik');
+            if (!warnings[target.id] || warnings[target.id].length === 0)
+                return interaction.editReply(`❌ ${target} nema nijednu opomenu.`);
+            const count = warnings[target.id].length;
+            warnings[target.id] = [];
+            saveWarnings();
+            await updateWarningsTable();
+            const ch = await client.channels.fetch(LOG_CHANNEL).catch(() => null);
+            if (ch) await ch.send({ embeds: [new EmbedBuilder().setColor(0x2ECC71).setTitle('❌ Sve opomene uklonjene')
+                .addFields(
+                    { name: 'Korisnik',  value: `${target}`, inline: true },
+                    { name: 'Moderator', value: `${mod}`,    inline: true },
+                    { name: 'Skinuto',   value: `${count} opomena`, inline: true }
+                ).setTimestamp()] }).catch(() => {});
+            return interaction.editReply({ embeds: [new EmbedBuilder().setColor(0x2ECC71).setTitle('✅ Sve opomene skinute')
+                .addFields({ name: 'Korisnik', value: `${target}`, inline: true }, { name: 'Skinuto', value: `${count} opomena`, inline: true })
+                .setTimestamp()] });
+        }
+
+        // ── /skini-opomenu ───────────────────────────────────
         if (commandName === 'skini-opomenu') {
             const target = interaction.options.getUser('korisnik');
 
