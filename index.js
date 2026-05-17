@@ -20,22 +20,17 @@ const RANK_HIERARCHY = [
     '1485364494325645508', 
 ];
 // ═══════════════════════════════════════════════════════════════════════════════
-const IMAGE_ONLY_CHANNEL = ['1485364495650918438','1486088080837312666','1494656453829722254','1500186521213337833',]; 
+const IMAGE_ONLY_CHANNEL = ['1485364495650918438','1486088080837312666']; 
 const TEXT_ONLY_CHANNEL  = '1485364495650918437';    
-const OPOMENA_CHANNEL    = '1428485257568718969';
+const OPOMENA_CHANNEL    = '1485364495269368000';
 const LOG_CHANNEL        = '1485738784170704979';    
-const VOICE_LOG_CHANNEL  = '1499888676417568879';
-const BLACKLIST_CHANNEL  = '1475993066350579775';
-const ZNACKE_CHANNEL     = '1428567778087932034';
+const VOICE_LOG_CHANNEL  = '1487227227161497701';
+const BLACKLIST_CHANNEL  = '1487814599565774899';
+const ZNACKE_CHANNEL     = '1491839471312834700';
 const TICKET_LOG_CHANNEL = '1488603717400789184';
 const TICKET_PARENT_CATEGORY = null;
 const ALLOWED_MOD_ROLES  = [
-    '1389740601800392904',
-    '1499423754554445865',
-    '1500557099963514900',
-    '1502388911866118205',
-    '1502388650783150200',
-    '1502738627002634282',
+    '1485364494359068815','1485364494350815250','1485364494350815249','1485364494359068818',
 ];
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -73,8 +68,8 @@ async function loadAllData() {
 }
 
 // ─── VC Tracking setup ────────────────────────────────────────────────────────────────────
-const VC_STATS_CHANNEL  = '1499888676417568879';
-const AFK_VOICE_CHANNEL = '1412124372126273536';
+const VC_STATS_CHANNEL  = '1485622323355586590';
+const AFK_VOICE_CHANNEL = '1485998086395396136';
 const AFK_TIMEOUT_MS    = 10 * 60 * 1000;
 const vcStartTimes      = new Map();
 const afkTimers         = new Map();
@@ -225,20 +220,14 @@ async function createTicket(interaction, typeKey) {
         type: ChannelType.GuildText,
         permissionOverwrites,
     };
-    const categoryIds = {
-        tiket_zalbe:    '1500909210349867079',
-        tiket_poso:     '1500909284928655522',
-    };
     const categoryNames = {
         tiket_popravka: 'POPRAVKA ORUZIJA',
+        tiket_zalbe:    'ZALBE',
+        tiket_poso:     'TIKET ZA POSO',
         tiket_kupovina: 'KUPOVINA ORUZIJA',
     };
-    if (categoryIds[typeKey]) {
-        channelOptions.parent = categoryIds[typeKey];
-    } else {
-        const cat = await findOrCreateCategory(guild, categoryNames[typeKey]);
-        if (cat) channelOptions.parent = cat.id;
-    }
+    const cat = await findOrCreateCategory(guild, categoryNames[typeKey]);
+    if (cat) channelOptions.parent = cat.id;
 
     const channel = await guild.channels.create(channelOptions).catch(() => null);
     if (!channel) {
