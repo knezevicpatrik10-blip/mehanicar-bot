@@ -124,6 +124,12 @@ const commands = [
         .setDescription('Resetuje tablicu opomena — skida SVE opomene svim korisnicima')
         .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
+    new SlashCommandBuilder()
+        .setName('skinisveopomene')
+        .setDescription('Skida SVE opomene odabranom korisniku')
+        .addUserOption(o => o.setName('korisnik').setDescription('Korisnik kojemu se skidaju sve opomene').setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+
     // ── DAJ SVIMA / SKINI SVIMA ──────────────────────────────────────
     new SlashCommandBuilder()
         .setName('dajsvima')
